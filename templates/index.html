@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AbiArt — AI Image Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Graduate&family=Courier+Prime:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/style.css" rel="stylesheet">
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
+            <span class="logo-text">AbiArt</span>
+        </div>
+        <div class="header-controls">
+            <div class="backend-toggle">
+                <button class="backend-btn active" data-backend="huggingface" onclick="setBackend('huggingface')"><i
+                        class="fas fa-cloud"></i> HF</button>
+                <button class="backend-btn" data-backend="kaggle" onclick="setBackend('kaggle')"><i
+                        class="fas fa-server"></i> Kaggle</button>
+                <button class="backend-btn" data-backend="modal" onclick="setBackend('modal')"><i
+                        class="fas fa-bolt"></i> Modal</button>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Ready</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <!-- ====== LEFT SIDEBAR ====== -->
+        <aside class="sidebar">
+            <div class="sidebar-inner">
+
+                <!-- PROMPT -->
+                <details class="sb-section" open>
+                    <summary><i class="fas fa-pen-fancy"></i> Prompt</summary>
+                    <div class="sb-body">
+                        <textarea id="promptInput" spellcheck="false"
+                            placeholder="A majestic dragon soaring through aurora borealis, digital art, 8k..."></textarea>
+                        <div class="quick-prompts">
+                            <span class="quick-prompt"
+                                data-prompt="A cyberpunk city at night, neon lights, rain, highly detailed, 8k">Cyberpunk</span>
+                            <span class="quick-prompt"
+                                data-prompt="Beautiful anime girl, flowing hair, studio ghibli style, soft lighting">Anime</span>
+                            <span class="quick-prompt"
+                                data-prompt="Mystical forest with glowing mushrooms, fantasy art, ethereal">Fantasy</span>
+                            <span class="quick-prompt"
+                                data-prompt="Futuristic spaceship interior, sci-fi, cinematic lighting, 8k">Sci-Fi</span>
+                        </div>
+                        <div class="field">
+                            <label class="field-label">Negative Prompt</label>
+                            <textarea id="negativePrompt" spellcheck="false" style="min-height:40px"
+                                placeholder="ugly, blurry, low quality..."></textarea>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- PRESETS -->
+                <details class="sb-section">
+                    <summary><i class="fas fa-bookmark"></i> Presets</summary>
+                    <div class="sb-body">
+                        <div class="row">
+                            <input type="text" id="presetName" placeholder="Preset name..." spellcheck="false"
+                                style="flex:1">
+                            <button class="btn btn-sm" onclick="savePreset()"><i class="fas fa-save"></i> Save</button>
+                        </div>
+                        <div id="presetList" style="display:flex;flex-direction:column;gap:.25rem;margin-top:.25rem">
+                            <!-- Presets rendered here -->
+                        </div>
+                    </div>
+                </details>
+
+                <!-- HF SETTINGS -->
+                <div id="hfSettings">
+                    <details class="sb-section" open>
+                        <summary><i class="fas fa-sliders"></i> HF Settings</summary>
+                        <div class="sb-body">
+                            <div class="field">
+                                <label class="field-label">Model</label>
+                                <select id="hfModel">
+                                    <option value="sdxl">Stable Diffusion XL</option>
+                                    <option value="sdxl-turbo">SDXL Turbo (Fast)</option>
+                                    <option value="dreamshaper">DreamShaper 8</option>
+                                    <option value="sd15">SD 1.5</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Guidance <input type="number" class="field-val-input"
+                                        id="hfGuidanceVal" value="7.5" min="1" max="20" step="0.5"></label>
+                                <input type="range" id="hfGuidance" min="1" max="20" step="0.5" value="7.5">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">API Key</label>
+                                <div class="row">
+                                    <input type="text" id="hfApiKey" placeholder="Hugging Face token" style="flex:1">
+                                    <button class="btn btn-sm" onclick="saveHfKey()">Save</button>
+                                </div>
+                                <a href="https://huggingface.co/settings/tokens" target="_blank"
+                                    style="font-size:.65rem">Get free token →</a>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- KAGGLE CONFIG -->
+                <div id="kaggleConfig" style="display:none">
+                    <details class="sb-section" open>
+                        <summary><i class="fas fa-link"></i> Kaggle Connection</summary>
+                        <div class="sb-body">
+                            <div class="row">
+                                <input type="url" id="kaggleUrl" placeholder="https://xxxx.ngrok.io" style="flex:1">
+                                <button class="btn btn-sm" onclick="testKaggleConnection()"><i class="fas fa-plug"></i>
+                                    Connect</button>
+                            </div>
+                            <p style="font-size:.65rem;color:var(--muted)"><i class="fas fa-info-circle"></i> Run the
+                                Kaggle notebook first to get your ngrok URL</p>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- KAGGLE SETTINGS -->
+                <div id="kaggleSettings" style="display:none">
+                    <details class="sb-section" open>
+                        <summary><i class="fas fa-sliders"></i> Generation</summary>
+                        <div class="sb-body">
+                            <div class="field">
+                                <label class="field-label">Checkpoint</label>
+                                <select id="kaggleModel">
+                                    <option value="">Loading models...</option>
+                                </select>
+                            </div>
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">CFG <input type="number" class="field-val-input"
+                                            id="cfgVal" value="7" min="1" max="20" step="0.5"></label>
+                                    <input type="range" id="cfgScale" min="1" max="20" step="0.5" value="7">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="stepsVal" value="25" min="10" max="50" step="5"></label>
+                                    <input type="range" id="steps" min="10" max="50" step="5" value="25">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Size</label>
+                                <select id="imgSize">
+                                    <option value="512x512">512×512</option>
+                                    <option value="512x768">512×768 Portrait</option>
+                                    <option value="768x512">768×512 Landscape</option>
+                                    <option value="768x768">768×768</option>
+                                </select>
+                            </div>
+                            <div id="activeLorasSection">
+                                <label class="field-label" style="margin-bottom:.3rem">Active LoRAs</label>
+                                <div id="activeLoraList">
+                                    <p style="color:var(--muted);font-size:.7rem">No LoRAs active</p>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- MODAL SETTINGS -->
+                <div id="modalSettings" style="display:none">
+                    <!-- Model -->
+                    <details class="sb-section" open>
+                        <summary><i class="fas fa-cube"></i> Model</summary>
+                        <div class="sb-body">
+                            <div class="field">
+                                <label class="field-label">Checkpoint</label>
+                                <div class="row">
+                                    <select id="modalModel" style="flex:1">
+                                        <option value="default">SDXL Base 1.0</option>
+                                    </select>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteSelectedCheckpoint()"
+                                        title="Delete">🗑</button>
+                                </div>
+                            </div>
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">VAE</label>
+                                    <select id="modalVae">
+                                        <option value="Automatic">Automatic</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Sampler</label>
+                                    <select id="modalScheduler">
+                                        <option value="DPM++ 2M Karras">DPM++ 2M Karras</option>
+                                        <option value="Euler">Euler</option>
+                                        <option value="Euler a">Euler a</option>
+                                        <option value="DPM++ SDE Karras">DPM++ SDE Karras</option>
+                                        <option value="DPM++ 2M">DPM++ 2M</option>
+                                        <option value="DDIM">DDIM</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Generation params -->
+                    <details class="sb-section" open>
+                        <summary><i class="fas fa-sliders"></i> Generation</summary>
+                        <div class="sb-body">
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="modalStepsVal" value="30" min="10" max="60" step="1"></label>
+                                    <input type="range" id="modalSteps" min="10" max="60" step="1" value="30">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">CFG <input type="number" class="field-val-input"
+                                            id="modalCfgVal" value="7" min="1" max="20" step="0.5"></label>
+                                    <input type="range" id="modalCfgScale" min="1" max="20" step="0.5" value="7">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Size</label>
+                                <div class="row">
+                                    <input type="number" id="modalWidth" value="1024" min="256" max="2048" step="64"
+                                        style="flex:1">
+                                    <span style="color:var(--muted)">×</span>
+                                    <input type="number" id="modalHeight" value="1024" min="256" max="2048" step="64"
+                                        style="flex:1">
+                                </div>
+                                <div class="quick-prompts" style="margin-top:.3rem">
+                                    <span class="preset-btn"
+                                        onclick="document.getElementById('modalWidth').value=1024;document.getElementById('modalHeight').value=1024">1024²</span>
+                                    <span class="preset-btn"
+                                        onclick="document.getElementById('modalWidth').value=832;document.getElementById('modalHeight').value=1216">832×1216</span>
+                                    <span class="preset-btn"
+                                        onclick="document.getElementById('modalWidth').value=1216;document.getElementById('modalHeight').value=832">1216×832</span>
+                                    <span class="preset-btn"
+                                        onclick="document.getElementById('modalWidth').value=768;document.getElementById('modalHeight').value=1344">768×1344</span>
+                                </div>
+                            </div>
+                            <div class="grid-3">
+                                <div class="field">
+                                    <label class="field-label">Seed</label>
+                                    <input type="number" id="modalSeed" value="-1">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Clip <input type="number" class="field-val-input"
+                                            id="modalClipSkipVal" value="1" min="1" max="2" step="1"></label>
+                                    <input type="range" id="modalClipSkip" min="1" max="2" step="1" value="1">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Batch</label>
+                                    <select id="modalBatchCount">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- ADetailer -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-face-smile"></i> ADetailer</summary>
+                        <div class="sb-body">
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="modalAdetailer"> Enable ADetailer
+                            </label>
+                            <div class="field">
+                                <label class="field-label">Detection Model</label>
+                                <select id="modalAdModel">
+                                    <option value="face_yolov8n.pt">face_yolov8n (fast)</option>
+                                    <option value="face_yolov8s.pt">face_yolov8s (better)</option>
+                                    <option value="person_yolov8n-seg.pt">person_yolov8n-seg</option>
+                                    <option value="mediapipe_face_full">mediapipe_face_full</option>
+                                    <option value="mediapipe_face_short">mediapipe_face_short</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Confidence Threshold <input type="number"
+                                        class="field-val-input" id="modalAdConfidenceVal" value="0.30" min="0.0"
+                                        max="1.0" step="0.05"></label>
+                                <input type="range" id="modalAdConfidence" min="0.0" max="1.0" step="0.05" value="0.3">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Face Prompt</label>
+                                <input type="text" id="modalAdPrompt" spellcheck="false"
+                                    placeholder="detailed face, perfect eyes...">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Negative</label>
+                                <input type="text" id="modalAdNegative" spellcheck="false" placeholder="">
+                            </div>
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Strength <input type="number" class="field-val-input"
+                                            id="modalAdStrengthVal" value="0.40" min="0.1" max="1.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="modalAdStrength" min="0.1" max="1.0" step="0.05"
+                                        value="0.4">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="modalAdStepsVal" value="25" min="10" max="50" step="1"></label>
+                                    <input type="range" id="modalAdSteps" min="10" max="50" step="1" value="25">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Hi-Res Fix -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-expand"></i> Hi-Res Fix</summary>
+                        <div class="sb-body">
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="modalHiresEnable"> Enable Hi-Res Fix
+                            </label>
+                            <div class="field">
+                                <label class="field-label">Upscaler</label>
+                                <select id="modalHiresUpscaler">
+                                    <option value="R-ESRGAN 4x+">R-ESRGAN 4x+</option>
+                                    <option value="R-ESRGAN 4x+ Anime6B">R-ESRGAN Anime6B</option>
+                                    <option value="Latent">Latent</option>
+                                    <option value="SwinIR_4x">SwinIR 4x</option>
+                                </select>
+                            </div>
+                            <div class="grid-3">
+                                <div class="field">
+                                    <label class="field-label">Scale <input type="number" class="field-val-input"
+                                            id="modalHiresScaleVal" value="1.50" min="1.25" max="2.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="modalHiresScale" min="1.25" max="2.0" step="0.05"
+                                        value="1.5">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Denoise <input type="number" class="field-val-input"
+                                            id="modalHiresDenoiseVal" value="0.35" min="0.1" max="0.7"
+                                            step="0.05"></label>
+                                    <input type="range" id="modalHiresDenoising" min="0.1" max="0.7" step="0.05"
+                                        value="0.35">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="modalHiresStepsVal" value="15" min="5" max="30" step="1"></label>
+                                    <input type="range" id="modalHiresSteps" min="5" max="30" step="1" value="15">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- LoRAs -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-puzzle-piece"></i> LoRAs</summary>
+                        <div class="sb-body">
+                            <label class="field-label" style="margin-bottom:.2rem">Active</label>
+                            <div id="modalActiveLoraList">
+                                <p style="color:var(--muted);font-size:.7rem">No LoRAs active</p>
+                            </div>
+                            <div style="margin-top:.4rem;border-top:1px solid var(--muted);padding-top:.4rem">
+                                <label class="field-label" style="margin-bottom:.2rem">Available on Modal</label>
+                                <div class="row" style="margin-bottom:.3rem">
+                                    <input type="text" id="newFolderName" placeholder="New folder..." spellcheck="false"
+                                        style="flex:1">
+                                    <button class="btn btn-sm" onclick="createLoraFolder()"><i
+                                            class="fas fa-folder-plus"></i></button>
+                                </div>
+                                <div id="modalAvailableLoraList">
+                                    <p style="color:var(--muted);font-size:.7rem">Loading...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- CIVITAI BROWSER (Kaggle + Modal) -->
+                <div id="civitaiBrowser" style="display:none">
+                    <details class="sb-section">
+                        <summary><i class="fas fa-download"></i> Add Model (Civitai)</summary>
+                        <div class="sb-body">
+                            <div class="field">
+                                <input type="text" id="civitaiUrl" placeholder="https://civitai.com/models/...">
+                            </div>
+                            <div class="field">
+                                <input type="text" id="civitaiFilename" placeholder="model_name.safetensors">
+                            </div>
+                            <div class="field">
+                                <input type="text" id="civitaiToken" placeholder="Civitai API Token (optional)">
+                            </div>
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.7rem">
+                                <input type="checkbox" id="civitaiIsLora">
+                                <span style="color:var(--muted)">This is a LoRA</span>
+                            </label>
+                            <button class="btn-accent" onclick="downloadFromCivitaiUrl()" style="padding:.5rem">
+                                <i class="fas fa-cloud-download-alt"></i> Download Model
+                            </button>
+                            <a href="https://civitai.com/user/account" target="_blank"
+                                style="font-size:.6rem;color:var(--accent2)">Get Civitai API token →</a>
+                            <div id="downloadStatus" style="display:none;margin-top:.3rem">
+                                <p style="font-size:.7rem;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i>
+                                    <span id="downloadStatusText">Downloading...</span>
+                                </p>
+                            </div>
+
+                            <!-- Search -->
+                            <div style="margin-top:.5rem;border-top:1px solid var(--muted);padding-top:.5rem">
+                                <div class="row" style="margin-bottom:.4rem">
+                                    <input type="text" id="civitaiSearch" placeholder="Search Civitai..."
+                                        style="flex:1">
+                                    <button class="btn btn-sm" onclick="searchCivitai()"><i
+                                            class="fas fa-search"></i></button>
+                                </div>
+                                <div class="row" style="margin-bottom:.4rem">
+                                    <button class="btn btn-sm" style="flex:1" data-tab="checkpoints"
+                                        onclick="switchModelTab('checkpoints')">Checkpoints</button>
+                                    <button class="btn btn-sm" style="flex:1" data-tab="loras"
+                                        onclick="switchModelTab('loras')">LoRAs</button>
+                                </div>
+                                <div class="model-grid" id="modelGrid">
+                                    <p style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.7rem">
+                                        Search for models above</p>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- HF API Card (hidden when not HF) - kept for backwards compat, merged into HF settings -->
+                <div id="hfApiCard" style="display:none"></div>
+
+            </div><!-- /sidebar-inner -->
+
+            <!-- Generate button pinned at bottom -->
+            <div class="sidebar-footer">
+                <button class="btn-accent" id="generateBtn" onclick="generateImage()">
+                    <i class="fas fa-sparkles"></i> Generate Image
+                </button>
+            </div>
+        </aside>
+
+        <!-- ====== CENTER CANVAS ====== -->
+        <main class="canvas-area">
+            <div class="canvas-main" id="outputArea">
+                <div class="placeholder">
+                    <i class="fas fa-image"></i>
+                    <p>Your creation will appear here</p>
+                </div>
+            </div>
+            <div class="gen-info-bar" id="genInfoBar"><span id="genInfoText"></span></div>
+            <div class="history-strip" id="imageHistoryCard">
+                <div class="history-scroll" id="imageHistory"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Download Modal -->
+    <div class="modal-overlay" id="downloadModal" style="display:none">
+        <div class="modal">
+            <h2><i class="fas fa-download"></i> Download Model</h2>
+            <div id="downloadModalContent"></div>
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="closeDownloadModal()">Cancel</button>
+                <button class="modal-btn primary" id="confirmDownloadBtn">Download</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== STATE ==========
+        let currentBackend = 'huggingface';
+        let kaggleUrl = localStorage.getItem('kaggle_url') || '';
+        let activeLoRAs = [];
+        let currentModelTab = 'checkpoints';
+        let currentImage = null;
+        let activeModalLoras = [];
+
+        // ========== INIT ==========
+        document.addEventListener('DOMContentLoaded', () => {
+            const storedKey = localStorage.getItem('hf_api_key');
+            if (storedKey) document.getElementById('hfApiKey').value = storedKey;
+            if (kaggleUrl) document.getElementById('kaggleUrl').value = kaggleUrl;
+            setupEventListeners();
+            restoreLastSettings();
+            renderPresetList();
+            loadHistoryFromStorage();
+        });
+
+        function setupEventListeners() {
+            // Quick prompts
+            document.querySelectorAll('.quick-prompt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.getElementById('promptInput').value = btn.dataset.prompt;
+                });
+            });
+
+            // Bidirectional slider <-> number input sync
+            // Each pair: [sliderId, inputId]
+            const sliderPairs = [
+                ['hfGuidance', 'hfGuidanceVal'],
+                ['cfgScale', 'cfgVal'],
+                ['steps', 'stepsVal'],
+                ['modalCfgScale', 'modalCfgVal'],
+                ['modalSteps', 'modalStepsVal'],
+                ['modalClipSkip', 'modalClipSkipVal'],
+                ['modalAdConfidence', 'modalAdConfidenceVal'],
+                ['modalAdStrength', 'modalAdStrengthVal'],
+                ['modalAdSteps', 'modalAdStepsVal'],
+                ['modalHiresScale', 'modalHiresScaleVal'],
+                ['modalHiresDenoising', 'modalHiresDenoiseVal'],
+                ['modalHiresSteps', 'modalHiresStepsVal'],
+            ];
+            sliderPairs.forEach(([sliderId, inputId]) => {
+                const slider = document.getElementById(sliderId);
+                const numInput = document.getElementById(inputId);
+                if (!slider || !numInput) return;
+                // Slider -> number input
+                slider.addEventListener('input', () => { numInput.value = slider.value; });
+                // Number input -> slider
+                numInput.addEventListener('input', () => {
+                    let v = parseFloat(numInput.value);
+                    if (!isNaN(v)) {
+                        v = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), v));
+                        slider.value = v;
+                    }
+                });
+                // Clamp on blur
+                numInput.addEventListener('blur', () => {
+                    let v = parseFloat(numInput.value);
+                    if (isNaN(v)) v = parseFloat(slider.value);
+                    v = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), v));
+                    numInput.value = v;
+                    slider.value = v;
+                });
+            });
+
+            // Civitai search enter
+            document.getElementById('civitaiSearch').addEventListener('keypress', e => {
+                if (e.key === 'Enter') searchCivitai();
+            });
+        }
+
+        // ========== BACKEND SWITCHING ==========
+        function setBackend(backend) {
+            currentBackend = backend;
+            document.querySelectorAll('.backend-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.backend === backend);
+            });
+            const isKaggle = backend === 'kaggle';
+            const isModal = backend === 'modal';
+            const isHF = backend === 'huggingface';
+            document.getElementById('kaggleConfig').style.display = isKaggle ? '' : 'none';
+            document.getElementById('hfSettings').style.display = isHF ? '' : 'none';
+            document.getElementById('kaggleSettings').style.display = isKaggle ? '' : 'none';
+            document.getElementById('modalSettings').style.display = isModal ? '' : 'none';
+            document.getElementById('civitaiBrowser').style.display = (isKaggle || isModal) ? '' : 'none';
+            document.getElementById('hfApiCard').style.display = 'none';
+            if (isKaggle && kaggleUrl) loadKaggleModels();
+            if (isModal) { updateStatus('Modal Ready', 'success'); refreshModalModels(); }
+        }
+
+        // ========== KAGGLE ==========
+        async function testKaggleConnection() {
+            const url = document.getElementById('kaggleUrl').value.trim();
+            if (!url) { showToast('Please enter the ngrok URL'); return; }
+            updateStatus('Connecting...', 'warning');
+            try {
+                const response = await fetch('/api/kaggle/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+                const data = await response.json();
+                if (data.success) { kaggleUrl = url; localStorage.setItem('kaggle_url', url); updateStatus('Connected', 'success'); showToast('Connected to Kaggle!', 'success'); loadKaggleModels(); }
+                else throw new Error(data.error || 'Connection failed');
+            } catch (e) { updateStatus('Disconnected', 'error'); showToast(e.message); }
+        }
+
+        async function loadKaggleModels() {
+            if (!kaggleUrl) return;
+            try {
+                const response = await fetch('/api/kaggle/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: kaggleUrl }) });
+                const data = await response.json();
+                if (data.models) {
+                    document.getElementById('kaggleModel').innerHTML = data.models.map(m => `<option value="${m.title}">${m.model_name}</option>`).join('');
+                }
+            } catch (e) { console.error('Failed to load models:', e); }
+        }
+
+        // ========== CIVITAI ==========
+        async function searchCivitai() {
+            const query = document.getElementById('civitaiSearch').value.trim();
+            const type = currentModelTab === 'checkpoints' ? 'Checkpoint' : 'LORA';
+            const grid = document.getElementById('modelGrid');
+            grid.innerHTML = '<p style="grid-column:1/-1;text-align:center"><i class="fas fa-spinner fa-spin"></i> Searching...</p>';
+            try {
+                const response = await fetch(`/api/civitai/search?query=${encodeURIComponent(query)}&type=${type}`);
+                const data = await response.json();
+                if (data.models && data.models.length > 0) {
+                    grid.innerHTML = data.models.map(m => `
+                    <div class="model-card" onclick="selectCivitaiModel(${JSON.stringify(m).replace(/"/g, '&quot;')})">
+                        <img src="${m.image || 'https://via.placeholder.com/150?text=No+Image'}" alt="${m.name}">
+                        <div class="model-info"><div class="model-name">${m.name}</div><div class="model-type">${m.type}</div></div>
+                    </div>`).join('');
+                } else { grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.7rem">No models found</p>'; }
+            } catch (e) { grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--error)">Search failed</p>'; }
+        }
+
+        function switchModelTab(tab) {
+            currentModelTab = tab;
+            document.querySelectorAll('[data-tab]').forEach(t => t.style.borderColor = t.dataset.tab === tab ? 'var(--text)' : '');
+            searchCivitai();
+        }
+
+        // ========== MODAL MODELS ==========
+        // LoRA folder management
+        function getLoraFolders() {
+            try { return JSON.parse(localStorage.getItem('abiart_lora_folders') || '{}'); } catch (e) { return {}; }
+        }
+        function saveLoraFolders(folders) {
+            localStorage.setItem('abiart_lora_folders', JSON.stringify(folders));
+        }
+        function createLoraFolder() {
+            const input = document.getElementById('newFolderName');
+            const name = input.value.trim();
+            if (!name) { showToast('Enter a folder name'); return; }
+            const folders = getLoraFolders();
+            if (folders[name]) { showToast('Folder already exists'); return; }
+            folders[name] = [];
+            saveLoraFolders(folders);
+            input.value = '';
+            renderLorasByFolder(window._allModalLoras || []);
+            showToast(`Folder "${name}" created`, 'success');
+        }
+        function deleteLoraFolder(name) {
+            if (!confirm(`Delete folder "${name}"? LoRAs will move to Uncategorized.`)) return;
+            const folders = getLoraFolders();
+            delete folders[name];
+            saveLoraFolders(folders);
+            renderLorasByFolder(window._allModalLoras || []);
+            showToast(`Folder "${name}" deleted`, 'success');
+        }
+        function moveLoraToFolder(lora, folder) {
+            const folders = getLoraFolders();
+            // Remove from all folders
+            Object.keys(folders).forEach(f => {
+                folders[f] = folders[f].filter(l => l !== lora);
+            });
+            // Add to target folder (empty string = uncategorized)
+            if (folder && folders[folder]) {
+                folders[folder].push(lora);
+            }
+            saveLoraFolders(folders);
+            renderLorasByFolder(window._allModalLoras || []);
+        }
+
+        function renderLorasByFolder(allLoras) {
+            const container = document.getElementById('modalAvailableLoraList');
+            if (!allLoras || allLoras.length === 0) {
+                container.innerHTML = '<p style="color:var(--muted);font-size:.7rem">No LoRAs yet</p>';
+                return;
+            }
+            const folders = getLoraFolders();
+            const folderNames = Object.keys(folders);
+            // Determine which LoRAs are in folders
+            const assigned = new Set();
+            folderNames.forEach(f => (folders[f] || []).forEach(l => assigned.add(l)));
+            const uncategorized = allLoras.filter(l => !assigned.has(l));
+
+            // Build folder options for move dropdown
+            const folderOpts = folderNames.map(f => `<option value="${f}">${f}</option>`).join('');
+
+            function renderLoraItem(lora, currentFolder) {
+                // Check if triggers already exist for this LoRA
+                let hasTriggers = false;
+                try {
+                    const st = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                    hasTriggers = st[lora] && st[lora].length > 0;
+                } catch (e) { }
+                const triggerBtnId = 'trigBtn_' + lora.replace(/[^a-zA-Z0-9]/g, '_');
+                return `<div class="lora-item"><div class="lora-row">
+                    <span class="lora-name" title="${lora}">${lora}</span>
+                    <div class="row">
+                        <button id="${triggerBtnId}" class="btn btn-sm" onclick="fetchLoraTriggers('${lora.replace(/'/g, "\\\'")}', '${triggerBtnId}')" title="${hasTriggers ? 'Trigger words saved ✓ (click to refresh)' : 'Fetch trigger words from Civitai'}" style="padding:.15rem .3rem;font-size:.6rem;${hasTriggers ? 'color:var(--success)' : ''}">${hasTriggers ? '✓' : '🔍'}</button>
+                        <select class="lora-folder-select" onchange="moveLoraToFolder('${lora.replace(/'/g, "\\\'")}',this.value)" title="Move to folder">
+                            <option value="" ${!currentFolder ? 'selected' : ''}>—</option>
+                            ${folderNames.map(f => `<option value="${f}" ${currentFolder === f ? 'selected' : ''}>${f}</option>`).join('')}
+                        </select>
+                        <button class="btn btn-sm" onclick="addLoraToActive('${lora}')">+ Add</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteModalFile('${lora}','lora')" title="Delete">🗑</button>
+                    </div>
+                </div></div>`;
+            }
+
+            let html = '';
+            // Render each folder
+            folderNames.forEach(fname => {
+                const lorasInFolder = (folders[fname] || []).filter(l => allLoras.includes(l));
+                html += `<details class="lora-folder" ${lorasInFolder.length > 0 ? 'open' : ''}>
+                    <summary class="lora-folder-header">
+                        <i class="fas fa-folder"></i> ${fname} <span style="color:var(--muted);font-size:.6rem">(${lorasInFolder.length})</span>
+                        <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteLoraFolder('${fname.replace(/'/g, "\\\'")}')" style="margin-left:auto;padding:.15rem .3rem;font-size:.55rem" title="Delete folder">✕</button>
+                    </summary>
+                    <div class="lora-folder-body">${lorasInFolder.length > 0 ? lorasInFolder.map(l => renderLoraItem(l, fname)).join('') : '<p style="color:var(--muted);font-size:.65rem;padding:.2rem">Empty</p>'}</div>
+                </details>`;
+            });
+            // Uncategorized
+            if (uncategorized.length > 0) {
+                html += `<details class="lora-folder" open>
+                    <summary class="lora-folder-header"><i class="fas fa-folder-open"></i> Uncategorized <span style="color:var(--muted);font-size:.6rem">(${uncategorized.length})</span></summary>
+                    <div class="lora-folder-body">${uncategorized.map(l => renderLoraItem(l, '')).join('')}</div>
+                </details>`;
+            }
+            container.innerHTML = html;
+        }
+
+        async function refreshModalModels() {
+            const select = document.getElementById('modalModel');
+            const loraListDiv = document.getElementById('modalAvailableLoraList');
+            select.innerHTML = '<option value="default">Loading...</option>';
+            loraListDiv.innerHTML = '<p style="color:var(--muted);font-size:.7rem"><i class="fas fa-spinner fa-spin"></i> Loading models...</p>';
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 130000);
+                const response = await fetch('/api/modal/models', { signal: controller.signal });
+                clearTimeout(timeoutId);
+                const data = await response.json();
+                if (data.models) select.innerHTML = data.models.map(m => `<option value="${m}">${m}</option>`).join('');
+                window._allModalLoras = data.loras || [];
+                renderLorasByFolder(window._allModalLoras);
+                const vaeSelect = document.getElementById('modalVae');
+                if (data.vaes && vaeSelect) vaeSelect.innerHTML = data.vaes.map(v => `<option value="${v}">${v}</option>`).join('');
+                updateActiveLorasDisplay();
+            } catch (e) {
+                select.innerHTML = '<option value="default">SDXL Base 1.0</option>';
+                loraListDiv.innerHTML = '<p style="color:var(--error);font-size:.7rem">Could not load (Modal offline?)</p>';
+            }
+        }
+
+        async function deleteModalFile(filename, type) {
+            if (!confirm(`Delete ${type === 'lora' ? 'LoRA' : 'checkpoint'} "${filename}"?`)) return;
+            try {
+                showToast(`Deleting ${filename}...`);
+                const response = await fetch('/api/modal/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename, type }) });
+                const data = await response.json();
+                if (data.success) { showToast(`Deleted ${filename}`, 'success'); activeModalLoras = activeModalLoras.filter(l => l.name !== filename); updateActiveLorasDisplay(); refreshModalModels(); }
+                else throw new Error(data.error);
+            } catch (e) { showToast('Delete failed: ' + e.message); }
+        }
+
+        function deleteSelectedCheckpoint() {
+            const model = document.getElementById('modalModel').value;
+            if (model === 'default' || model === 'SDXL Base 1.0') { showToast('Cannot delete the default model'); return; }
+            deleteModalFile(model, 'checkpoint');
+        }
+
+        async function fetchLoraTriggers(loraName, btnId) {
+            const btn = document.getElementById(btnId);
+            if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+            try {
+                // Strip .safetensors extension and clean up the name for search
+                const searchName = loraName.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
+                const response = await fetch(`/api/civitai/search?query=${encodeURIComponent(searchName)}&type=LORA`);
+                const data = await response.json();
+                if (data.models && data.models.length > 0) {
+                    // Try to find exact match first, then fall back to first result
+                    let match = data.models.find(m => m.filename === loraName) || data.models[0];
+                    if (match.trained_words && match.trained_words.length > 0) {
+                        const storedTriggers = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                        storedTriggers[loraName] = match.trained_words;
+                        localStorage.setItem('abiart_lora_triggers', JSON.stringify(storedTriggers));
+                        if (btn) { btn.textContent = '✓'; btn.style.color = 'var(--success)'; btn.title = `Trigger words saved: ${match.trained_words.join(', ')}`; }
+                        showToast(`Found ${match.trained_words.length} trigger word(s) for ${loraName}`, 'success');
+                    } else {
+                        if (btn) { btn.textContent = '—'; btn.title = 'No trigger words found on Civitai'; }
+                        showToast('No trigger words found for this LoRA');
+                    }
+                } else {
+                    if (btn) { btn.textContent = '✗'; btn.title = 'LoRA not found on Civitai'; }
+                    showToast('LoRA not found on Civitai');
+                }
+            } catch (e) {
+                console.error('Error fetching trigger words:', e);
+                if (btn) { btn.textContent = '✗'; btn.title = 'Error fetching triggers'; }
+                showToast('Error fetching trigger words: ' + e.message);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        function addLoraToActive(loraName) {
+            if (activeModalLoras.some(l => l.name === loraName)) { showToast('LoRA already active'); return; }
+
+            // Try to auto-populate trigger words from localStorage if we saved them during download
+            let defaultTrigger = '';
+            let triggerWords = [];
+            try {
+                const storedTriggers = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                if (storedTriggers[loraName] && Array.isArray(storedTriggers[loraName])) {
+                    triggerWords = storedTriggers[loraName];
+                    defaultTrigger = triggerWords.join(', ') + (triggerWords.length > 0 ? ', ' : '');
+                }
+            } catch (e) {
+                console.error("Error loading LoRA triggers", e);
+            }
+
+            activeModalLoras.push({ name: loraName, weight: 0.8, trigger: defaultTrigger });
+            updateActiveLorasDisplay();
+            showToast(`Added ${loraName}`, 'success');
+
+            // Show trigger word proposal if trigger words are available
+            if (triggerWords.length > 0) {
+                showTriggerWordProposal(loraName, triggerWords);
+            }
+        }
+
+        function showTriggerWordProposal(loraName, triggerWords) {
+            // Remove any existing proposal
+            const existing = document.querySelector('.trigger-proposal');
+            if (existing) existing.remove();
+
+            const proposal = document.createElement('div');
+            proposal.className = 'trigger-proposal';
+
+            const wordsHtml = triggerWords.map((word, i) =>
+                `<span class="trigger-word-chip" data-word="${word.replace(/"/g, '&quot;')}" onclick="toggleTriggerWordInPrompt(this, '${word.replace(/'/g, "\\'")}')" title="Click to add to prompt"><i class="fas fa-plus" style="font-size:.55rem"></i> ${word}</span>`
+            ).join('');
+
+            proposal.innerHTML = `
+                <div class="trigger-proposal-header">
+                    <span><i class="fas fa-magic"></i> Trigger words for ${loraName}</span>
+                    <button class="trigger-proposal-close" onclick="this.closest('.trigger-proposal').remove()">✕</button>
+                </div>
+                <div class="trigger-proposal-words">${wordsHtml}</div>
+                <div class="trigger-proposal-actions">
+                    <button onclick="this.closest('.trigger-proposal').remove()">Dismiss</button>
+                    <button class="primary" onclick="addAllTriggerWordsToPrompt(this)"><i class="fas fa-plus"></i> Add all to prompt</button>
+                </div>
+            `;
+
+            document.body.appendChild(proposal);
+
+            // Auto-dismiss after 15 seconds
+            setTimeout(() => { if (proposal.parentNode) proposal.remove(); }, 15000);
+        }
+
+        function toggleTriggerWordInPrompt(chip, word) {
+            const promptInput = document.getElementById('promptInput');
+            const currentPrompt = promptInput.value.trim();
+
+            if (chip.classList.contains('added')) {
+                // Remove the word from prompt
+                let newPrompt = currentPrompt;
+                // Try to remove "word, " or ", word" or just "word"
+                newPrompt = newPrompt.replace(new RegExp(',?\\s*' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*,?'), (match) => {
+                    // If match starts and ends with comma, keep one comma
+                    if (match.startsWith(',') && match.endsWith(',')) return ',';
+                    return '';
+                });
+                newPrompt = newPrompt.replace(/^[\s,]+|[\s,]+$/g, '').replace(/,\s*,/g, ',');
+                promptInput.value = newPrompt;
+                chip.classList.remove('added');
+                chip.querySelector('i').className = 'fas fa-plus';
+                chip.style.borderColor = '';
+            } else {
+                // Add the word to prompt
+                if (currentPrompt === '') {
+                    promptInput.value = word;
+                } else if (currentPrompt.endsWith(',')) {
+                    promptInput.value = currentPrompt + ' ' + word;
+                } else {
+                    promptInput.value = currentPrompt + ', ' + word;
+                }
+                chip.classList.add('added');
+                chip.querySelector('i').className = 'fas fa-check';
+            }
+        }
+
+        function addAllTriggerWordsToPrompt(btn) {
+            const proposal = btn.closest('.trigger-proposal');
+            const chips = proposal.querySelectorAll('.trigger-word-chip:not(.added)');
+            chips.forEach(chip => {
+                const word = chip.dataset.word;
+                toggleTriggerWordInPrompt(chip, word);
+            });
+            // Close after a short delay
+            setTimeout(() => { if (proposal.parentNode) proposal.remove(); }, 800);
+        }
+
+        function removeActiveLora(index) { activeModalLoras.splice(index, 1); updateActiveLorasDisplay(); }
+        function updateLoraWeight(index, weight) {
+            activeModalLoras[index].weight = parseFloat(weight);
+            const spans = document.querySelectorAll('#modalActiveLoraList .lora-weight-val');
+            if (spans[index]) spans[index].textContent = parseFloat(weight).toFixed(1);
+        }
+        function updateLoraTrigger(index, val) {
+            activeModalLoras[index].trigger = val;
+        }
+
+        function updateActiveLorasDisplay() {
+            const container = document.getElementById('modalActiveLoraList');
+            if (activeModalLoras.length === 0) { container.innerHTML = '<p style="color:var(--muted);font-size:.7rem">No LoRAs active</p>'; return; }
+            container.innerHTML = activeModalLoras.map((lora, i) => {
+                // Check if this LoRA has stored trigger words
+                let hasTriggers = false;
+                try {
+                    const storedTriggers = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                    hasTriggers = storedTriggers[lora.name] && storedTriggers[lora.name].length > 0;
+                } catch (e) { }
+
+                return `
+                <div class="lora-item"><div class="lora-row">
+                    <span class="lora-name">${lora.name}</span>
+                    <div class="row" style="gap:.2rem">
+                        ${hasTriggers ? `<button onclick="showTriggerWordProposal('${lora.name.replace(/'/g, "\\'")}', JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}')['${lora.name.replace(/'/g, "\\'")}'] || [])" style="background:none;border:none;color:var(--accent2);cursor:pointer;font-size:.7rem" title="Show trigger words"><i class="fas fa-magic"></i></button>` : ''}
+                        <button onclick="removeActiveLora(${i})" style="background:none;border:none;color:var(--error);cursor:pointer">✕</button>
+                    </div>
+                </div><div class="row">
+                    <input type="range" min="0.1" max="1.5" step="0.1" value="${lora.weight}" oninput="updateLoraWeight(${i},this.value)" style="flex:1">
+                    <span class="lora-weight-val" style="font-size:.7rem;color:var(--muted);min-width:1.5rem">${lora.weight.toFixed(1)}</span>
+                </div>
+                <div style="margin-top:.2rem">
+                    <input type="text" placeholder="Trigger words (auto-appended to prompt)" spellcheck="false" value="${lora.trigger || ''}" oninput="updateLoraTrigger(${i},this.value)" style="padding:.2rem;font-size:.65rem;border-color:var(--dim)">
+                </div></div>`;
+            }).join('');
+        }
+
+        // ========== DOWNLOAD ==========
+        function selectCivitaiModel(model) {
+            const target = currentBackend === 'modal' ? 'Modal' : 'Kaggle';
+            document.getElementById('downloadModalContent').innerHTML = `<p style="color:var(--muted);font-size:.8rem">Download <strong style="color:var(--text)">${model.name}</strong> to ${target}?<br><small>Type: ${model.type} | Version: ${model.version || 'Latest'}</small></p>`;
+            document.getElementById('downloadModal').style.display = 'flex';
+            document.getElementById('confirmDownloadBtn').onclick = () => { currentBackend === 'modal' ? downloadToModal(model) : downloadCivitaiModel(model); };
+        }
+
+        async function downloadCivitaiModel(model) {
+            closeDownloadModal(); showToast('Downloading model...', 'success');
+            try {
+                const response = await fetch('/api/kaggle/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: kaggleUrl, model_url: model.download_url, filename: model.filename, type: model.type.toLowerCase() }) });
+                const data = await response.json();
+                if (data.success) { showToast('Model downloaded!', 'success'); if (model.type === 'Checkpoint') loadKaggleModels(); }
+                else throw new Error(data.error);
+            } catch (e) { showToast('Download failed: ' + e.message); }
+        }
+
+        async function downloadFromCivitaiUrl() {
+            const url = document.getElementById('civitaiUrl').value.trim();
+            let filename = document.getElementById('civitaiFilename').value.trim();
+            const token = document.getElementById('civitaiToken').value.trim();
+            const isLora = document.getElementById('civitaiIsLora').checked;
+            if (!url) { showToast('Please enter a Civitai URL'); return; }
+            const statusDiv = document.getElementById('downloadStatus');
+            const statusText = document.getElementById('downloadStatusText');
+            statusDiv.style.display = 'block'; statusText.textContent = 'Resolving model info...';
+            try {
+                let modelVersionId = null, modelId = null;
+                let modelInfo = null;
+                const versionMatch = url.match(/modelVersionId=(\d+)/);
+                if (versionMatch) modelVersionId = versionMatch[1];
+                const modelMatch = url.match(/models\/(\d+)/);
+                if (modelMatch) modelId = modelMatch[1];
+
+                // Always fetch model info if we have a modelId (needed for trigger words)
+                if (modelId) {
+                    statusText.textContent = 'Looking up model info...';
+                    const infoResp = await fetch(`https://civitai.com/api/v1/models/${modelId}`);
+                    if (!infoResp.ok) throw new Error('Could not find model on Civitai');
+                    modelInfo = await infoResp.json();
+                    const versions = modelInfo.modelVersions || [];
+                    if (versions.length === 0) throw new Error('No versions found');
+                    if (!modelVersionId) {
+                        modelVersionId = versions[0].id;
+                    }
+                    if (!filename) { const files = versions[0].files || []; if (files.length > 0) filename = files[0].name || `model_${modelVersionId}.safetensors`; }
+                }
+                if (!modelVersionId) throw new Error('Could not extract model/version ID');
+                if (!filename) filename = isLora ? `lora_${modelVersionId}.safetensors` : `model_${modelVersionId}.safetensors`;
+                let downloadUrl = `https://civitai.com/api/download/models/${modelVersionId}`;
+                if (token) downloadUrl += `?token=${token}`;
+                statusText.textContent = `Downloading ${isLora ? 'LoRA' : 'checkpoint'}: ${filename}...`;
+                const response = await fetch('/api/modal/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_url: downloadUrl, filename, is_lora: isLora }) });
+                const data = await response.json();
+                if (data.success) {
+                    // Save trainedWords to localStorage if available
+                    if (isLora && modelInfo) {
+                        try {
+                            const versions = modelInfo.modelVersions || [];
+                            const v = versions.find(ver => ver.id == modelVersionId) || versions[0];
+                            if (v && v.trainedWords && v.trainedWords.length > 0) {
+                                const storedTriggers = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                                storedTriggers[filename] = v.trainedWords;
+                                localStorage.setItem('abiart_lora_triggers', JSON.stringify(storedTriggers));
+                            }
+                        } catch (e) { console.error("Error saving trigger words", e); }
+                    }
+
+                    statusText.textContent = `✓ Downloaded ${filename}`;
+                    showToast(`${isLora ? 'LoRA' : 'Model'} downloaded!`, 'success');
+                    refreshModalModels();
+                    document.getElementById('civitaiUrl').value = '';
+                    document.getElementById('civitaiFilename').value = '';
+                    document.getElementById('civitaiIsLora').checked = false;
+                    setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+                } else throw new Error(data.error);
+            } catch (e) { statusText.textContent = `✗ Failed: ${e.message}`; showToast('Download failed: ' + e.message); }
+        }
+
+        async function downloadToModal(model) {
+            closeDownloadModal(); showToast('Downloading model to Modal...', 'success'); updateStatus('Downloading...', 'warning');
+            try {
+                const isLora = model.type.toLowerCase() === 'lora';
+                const response = await fetch('/api/modal/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_url: model.download_url, filename: model.filename, is_lora: isLora }) });
+                const data = await response.json();
+                if (data.success) {
+                    // Save trained words
+                    if (model.type.toLowerCase() === 'lora' && model.trained_words && model.trained_words.length > 0) {
+                        try {
+                            const storedTriggers = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                            storedTriggers[model.filename] = model.trained_words;
+                            localStorage.setItem('abiart_lora_triggers', JSON.stringify(storedTriggers));
+                        } catch (e) { console.error("Error saving trigger words", e); }
+                    }
+
+                    showToast('Model downloaded to Modal!', 'success'); updateStatus('Modal Ready', 'success'); refreshModalModels();
+                }
+                else throw new Error(data.error);
+            } catch (e) { updateStatus('Download failed', 'error'); showToast('Download failed: ' + e.message); }
+        }
+
+        // ========== GALLERY HELPERS ==========
+        function expandGalleryImage(idx) {
+            const images = window._galleryImages;
+            if (!images || !images[idx]) return;
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+            overlay.innerHTML = `<img src="data:image/png;base64,${images[idx]}" style="max-width:90%;max-height:90%;">
+            <div style="position:absolute;top:20px;right:20px;display:flex;gap:10px;">
+                <button onclick="event.stopPropagation();downloadImageByData(${idx})" class="btn" style="padding:.5rem 1rem"><i class="fas fa-download"></i> Download</button>
+                <button onclick="this.closest('div').parentElement.remove()" class="btn" style="padding:.5rem 1rem">✕ Close</button>
+            </div>`;
+            overlay.onclick = () => overlay.remove();
+            document.body.appendChild(overlay);
+        }
+
+        function downloadImageByData(idx) {
+            const images = window._galleryImages;
+            if (!images || !images[idx]) return;
+            const a = document.createElement('a');
+            a.href = 'data:image/png;base64,' + images[idx];
+            a.download = `generated_${idx + 1}.png`;
+            a.click();
+        }
+
+        function closeDownloadModal() { document.getElementById('downloadModal').style.display = 'none'; }
+
+        // ========== GENERATE ==========
+        async function generateImage() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            if (!prompt) { showToast('Please enter a prompt'); return; }
+            const btn = document.getElementById('generateBtn');
+            const outputArea = document.getElementById('outputArea');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Generating...';
+            updateStatus('Generating...', 'warning');
+            outputArea.innerHTML = '<div style="text-align:center"><div class="loading-spinner"></div><p style="color:var(--muted);font-family:Graduate,serif">Creating your image...</p></div>';
+
+            try {
+                let response;
+                let finalPrompt = prompt; // Will be overridden with trigger words for modal
+                if (currentBackend === 'huggingface') {
+                    const apiKey = localStorage.getItem('hf_api_key');
+                    if (!apiKey) throw new Error('Please enter your Hugging Face API key');
+                    response = await fetch('/generate', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                            prompt, negative_prompt: document.getElementById('negativePrompt').value,
+                            model: document.getElementById('hfModel').value,
+                            guidance_scale: parseFloat(document.getElementById('hfGuidance').value),
+                            api_key: apiKey
+                        })
+                    });
+                } else if (currentBackend === 'modal') {
+                    // Trigger words handling
+                    finalPrompt = prompt;
+                    const triggers = activeModalLoras
+                        .filter(l => l.trigger && l.trigger.trim() !== '')
+                        .map(l => l.trigger.trim().replace(/,+$/, '')); // Remove trailing commas
+
+                    if (triggers.length > 0) {
+                        // Append triggers, safely ensuring there's a comma
+                        const triggersStr = triggers.join(', ');
+                        if (finalPrompt.trim().endsWith(',')) {
+                            finalPrompt += ' ' + triggersStr + ',';
+                        } else if (finalPrompt.trim() === '') {
+                            finalPrompt = triggersStr + ',';
+                        } else {
+                            finalPrompt += ', ' + triggersStr + ',';
+                        }
+                    }
+
+                    const modalWidth = parseInt(document.getElementById('modalWidth').value) || 1024;
+                    const modalHeight = parseInt(document.getElementById('modalHeight').value) || 1024;
+                    response = await fetch('/api/modal/generate', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                            prompt: finalPrompt, negative_prompt: document.getElementById('negativePrompt').value,
+                            cfg_scale: parseFloat(document.getElementById('modalCfgScale').value),
+                            steps: parseInt(document.getElementById('modalSteps').value),
+                            width: modalWidth, height: modalHeight,
+                            model: document.getElementById('modalModel').value,
+                            loras: activeModalLoras,
+                            scheduler: document.getElementById('modalScheduler').value,
+                            seed: parseInt(document.getElementById('modalSeed').value),
+                            clip_skip: parseInt(document.getElementById('modalClipSkip').value),
+                            vae: document.getElementById('modalVae').value,
+                            batch_count: parseInt(document.getElementById('modalBatchCount').value) || 1,
+                            adetailer_enabled: document.getElementById('modalAdetailer').checked,
+                            adetailer_model: document.getElementById('modalAdModel').value,
+                            adetailer_confidence: parseFloat(document.getElementById('modalAdConfidence').value),
+                            adetailer_prompt: document.getElementById('modalAdPrompt').value,
+                            adetailer_negative: document.getElementById('modalAdNegative').value,
+                            adetailer_strength: parseFloat(document.getElementById('modalAdStrength').value),
+                            adetailer_steps: parseInt(document.getElementById('modalAdSteps').value),
+                            enable_hr: document.getElementById('modalHiresEnable').checked,
+                            hr_upscaler: document.getElementById('modalHiresUpscaler').value,
+                            hr_scale: parseFloat(document.getElementById('modalHiresScale').value),
+                            hr_denoising_strength: parseFloat(document.getElementById('modalHiresDenoising').value),
+                            hr_second_pass_steps: parseInt(document.getElementById('modalHiresSteps').value)
+                        })
+                    });
+                } else {
+                    if (!kaggleUrl) throw new Error('Please connect to Kaggle first');
+                    const [width, height] = document.getElementById('imgSize').value.split('x').map(Number);
+                    response = await fetch('/api/kaggle/generate', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                            url: kaggleUrl, prompt,
+                            negative_prompt: document.getElementById('negativePrompt').value,
+                            model: document.getElementById('kaggleModel').value,
+                            cfg_scale: parseFloat(document.getElementById('cfgScale').value),
+                            steps: parseInt(document.getElementById('steps').value),
+                            width, height, loras: activeLoRAs
+                        })
+                    });
+                }
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+                currentImage = data.image;
+                const images = data.images || [data.image];
+
+                if (images.length === 1) {
+                    outputArea.innerHTML = `<img src="data:image/png;base64,${images[0]}" class="generated-image" id="genImage">
+                    <div class="image-actions"><button class="action-btn" onclick="downloadImage()" title="Download"><i class="fas fa-download"></i></button></div>`;
+                } else {
+                    let g = '<div style="display:grid;grid-template-columns:repeat(' + Math.min(images.length, 2) + ',1fr);gap:.75rem;width:100%">';
+                    images.forEach((img, idx) => {
+                        g += `<div style="position:relative;cursor:pointer" onclick="expandGalleryImage(${idx})">
+                        <img src="data:image/png;base64,${img}" style="width:100%;border:2px solid transparent;transition:.3s" onmouseover="this.style.borderColor='var(--text)'" onmouseout="this.style.borderColor='transparent'">
+                        <div style="position:absolute;top:8px;right:8px"><button class="action-btn" onclick="event.stopPropagation();downloadImageByData(${idx})" style="width:28px;height:28px;font-size:.7rem"><i class="fas fa-download"></i></button></div>
+                        <span style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.6);color:#fff;padding:2px 8px;font-size:.65rem">${idx + 1}/${images.length}</span>
+                    </div>`;
+                    });
+                    g += '</div>';
+                    outputArea.innerHTML = g;
+                    window._galleryImages = images;
+                }
+
+                // Info bar
+                const genInfo = data.info || {};
+                genInfo._prompt = prompt; // Original prompt without triggers
+                genInfo._final_prompt = finalPrompt; // Prompt with triggers sent to API
+                genInfo._negative = document.getElementById('negativePrompt').value;
+                genInfo._backend = currentBackend;
+                genInfo._loras = JSON.parse(JSON.stringify(activeModalLoras));
+                if (data.info) {
+                    const info = data.info;
+                    const bar = document.getElementById('genInfoBar');
+                    const parts = [];
+                    parts.push(`<strong>Model:</strong> ${info.model || 'SDXL'}`);
+                    parts.push(`<strong>Seed:</strong> <span style="cursor:pointer;text-decoration:underline" onclick="document.getElementById('modalSeed').value=${info.seed || -1}" title="Click to reuse">${info.seed || '?'}</span>`);
+                    parts.push(`<strong>Sampler:</strong> ${info.scheduler || 'Euler'}`);
+                    parts.push(`<strong>Steps:</strong> ${info.steps || 25}`);
+                    parts.push(`<strong>CFG:</strong> ${info.cfg_scale || 7}`);
+                    parts.push(`${info.width || 1024}×${info.height || 1024}`);
+                    if (info.clip_skip > 1) parts.push(`<strong>Clip:</strong> ${info.clip_skip}`);
+                    if (info.vae && info.vae !== 'Automatic') parts.push(`<strong>VAE:</strong> ${info.vae}`);
+                    if (info.adetailer) parts.push(`<strong>ADetailer:</strong> ✓`);
+                    if (info.batch_count > 1) parts.push(`<strong>Batch:</strong> ${info.batch_count}`);
+                    if (document.getElementById('modalHiresEnable') && document.getElementById('modalHiresEnable').checked) parts.push(`<strong>Hi-Res:</strong> ✓`);
+                    parts.push(`<button class="btn btn-sm" onclick="recycleParams(0)" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
+                    bar.innerHTML = parts.join(' &nbsp;|&nbsp; ');
+                    bar.style.display = 'block';
+                }
+                // Add ALL images to history (batch fix)
+                const allImages = data.images || [data.image];
+                allImages.forEach((img, idx) => {
+                    const imgInfo = Object.assign({}, genInfo);
+                    if (genInfo.seed && genInfo.seed > 0 && idx > 0) imgInfo.seed = genInfo.seed + idx;
+                    addToHistory(img, imgInfo);
+                });
+                updateStatus('Ready', 'success');
+                showToast('Image generated!', 'success');
+            } catch (e) {
+                outputArea.innerHTML = `<div class="placeholder"><i class="fas fa-exclamation-triangle" style="color:var(--error)"></i><p>${e.message}</p></div>`;
+                updateStatus('Error', 'error');
+                showToast(e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sparkles"></i> Generate Image';
+            }
+        }
+
+        function downloadImage() {
+            if (!currentImage) return;
+            const link = document.createElement('a');
+            link.href = 'data:image/png;base64,' + currentImage;
+            link.download = `abiart-${Date.now()}.png`;
+            link.click();
+        }
+
+        // ========== HISTORY (PERSISTENT) ==========
+        let imageHistoryData = [];
+        const HISTORY_KEY = 'abiart_image_history';
+        const MAX_HISTORY = 50;
+
+        function createThumbnail(base64, maxSize = 100) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ratio = Math.min(maxSize / img.width, maxSize / img.height);
+                    canvas.width = img.width * ratio;
+                    canvas.height = img.height * ratio;
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]);
+                };
+                img.src = 'data:image/png;base64,' + base64;
+            });
+        }
+
+        async function addToHistory(imageBase64, info) {
+            const thumb = await createThumbnail(imageBase64);
+            imageHistoryData.unshift({ image: imageBase64, thumb, info, timestamp: Date.now() });
+            if (imageHistoryData.length > MAX_HISTORY) imageHistoryData.pop();
+            renderHistoryStrip();
+            saveHistoryToStorage();
+        }
+
+        function renderHistoryStrip() {
+            const card = document.getElementById('imageHistoryCard');
+            const div = document.getElementById('imageHistory');
+            if (imageHistoryData.length === 0) { card.style.display = 'none'; return; }
+            card.style.display = 'block';
+            div.innerHTML = imageHistoryData.map((item, i) => `
+            <div style="flex-shrink:0;cursor:pointer;position:relative" onclick="viewHistoryItem(${i})" title="Seed: ${item.info.seed || '?'}">
+                <img src="data:image/jpeg;base64,${item.thumb || item.image}" style="width:50px;height:50px;object-fit:cover;border:2px solid ${i === 0 ? 'var(--accent)' : 'transparent'};${i === 0 ? 'filter:none' : 'filter:grayscale(1)'}">
+            </div>`).join('') + `
+            <div style="flex-shrink:0;display:flex;align-items:center;padding:0 .3rem">
+                <button class="btn btn-sm btn-danger" onclick="clearHistory()" title="Clear history" style="padding:.2rem .3rem;font-size:.55rem">✕ Clear</button>
+            </div>`;
+        }
+
+        function saveHistoryToStorage() {
+            try {
+                // Save only thumbnails + info (not full images) to fit in localStorage
+                const compact = imageHistoryData.map(item => ({
+                    thumb: item.thumb,
+                    info: item.info,
+                    timestamp: item.timestamp
+                }));
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(compact));
+            } catch (e) {
+                console.warn('Could not save history (storage full?)', e);
+                // Try reducing size
+                if (imageHistoryData.length > 10) {
+                    imageHistoryData = imageHistoryData.slice(0, 10);
+                    saveHistoryToStorage();
+                }
+            }
+        }
+
+        function loadHistoryFromStorage() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                imageHistoryData = saved.map(item => ({
+                    image: item.image || item.thumb, // full image if available, else thumb
+                    thumb: item.thumb,
+                    info: item.info || {},
+                    timestamp: item.timestamp
+                }));
+                renderHistoryStrip();
+            } catch (e) { console.warn('Could not load history:', e); }
+        }
+
+        function clearHistory() {
+            if (!confirm('Clear all image history?')) return;
+            imageHistoryData = [];
+            localStorage.removeItem(HISTORY_KEY);
+            document.getElementById('imageHistoryCard').style.display = 'none';
+            showToast('History cleared', 'success');
+        }
+
+        function viewHistoryItem(index) {
+            const item = imageHistoryData[index];
+            if (!item) return;
+            currentImage = item.image;
+            const imgSrc = item.image.length > 1000 ? `data:image/png;base64,${item.image}` : `data:image/jpeg;base64,${item.thumb}`;
+            document.getElementById('outputArea').innerHTML = `<img src="${imgSrc}" class="generated-image" id="genImage">
+            <div class="image-actions">
+                <button class="action-btn" onclick="recycleParams(${index})" title="Recycle settings"><i class="fas fa-recycle"></i></button>
+                <button class="action-btn" onclick="downloadImage()" title="Download"><i class="fas fa-download"></i></button>
+            </div>`;
+            const info = item.info;
+            const bar = document.getElementById('genInfoBar');
+            const parts = [];
+            parts.push(`<strong>Model:</strong> ${info.model || 'SDXL'}`);
+            parts.push(`<strong>Seed:</strong> <span style="cursor:pointer;text-decoration:underline" onclick="document.getElementById('modalSeed').value=${info.seed || -1}">${info.seed || '?'}</span>`);
+            parts.push(`<strong>Sampler:</strong> ${info.scheduler || 'Euler'}`);
+            parts.push(`<strong>Steps:</strong> ${info.steps || 25}`);
+            parts.push(`<strong>CFG:</strong> ${info.cfg_scale || 7}`);
+            parts.push(`${info.width || 1024}×${info.height || 1024}`);
+            if (info.clip_skip > 1) parts.push(`<strong>Clip:</strong> ${info.clip_skip}`);
+            if (info.adetailer) parts.push(`<strong>ADetailer:</strong> ✓`);
+            parts.push(`<button class="btn btn-sm" onclick="recycleParams(${index})" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
+            bar.innerHTML = parts.join(' &nbsp;|&nbsp; ');
+            bar.style.display = 'block';
+        }
+
+        // ========== RECYCLE PARAMS ==========
+        function recycleParams(historyIndex) {
+            const item = imageHistoryData[historyIndex];
+            if (!item || !item.info) { showToast('No parameters to recycle'); return; }
+            const info = item.info;
+            // Restore prompt & negative
+            if (info._prompt) document.getElementById('promptInput').value = info._prompt;
+            if (info._negative !== undefined) document.getElementById('negativePrompt').value = info._negative;
+            // Restore Modal settings
+            if (info.seed !== undefined) document.getElementById('modalSeed').value = info.seed;
+            if (info.steps) { document.getElementById('modalSteps').value = info.steps; document.getElementById('modalStepsVal').value = info.steps; }
+            if (info.cfg_scale) { document.getElementById('modalCfgScale').value = info.cfg_scale; document.getElementById('modalCfgVal').value = info.cfg_scale; }
+            if (info.width) document.getElementById('modalWidth').value = info.width;
+            if (info.height) document.getElementById('modalHeight').value = info.height;
+            if (info.scheduler) document.getElementById('modalScheduler').value = info.scheduler;
+            if (info.clip_skip) { document.getElementById('modalClipSkip').value = info.clip_skip; document.getElementById('modalClipSkipVal').value = info.clip_skip; }
+            if (info.vae) document.getElementById('modalVae').value = info.vae;
+            // Restore LoRAs
+            if (info._loras) {
+                activeModalLoras = JSON.parse(JSON.stringify(info._loras));
+                updateActiveLorasDisplay();
+            }
+            // Switch backend if needed
+            if (info._backend) setBackend(info._backend);
+            autoSaveSettings();
+            showToast('♻ Settings recycled!', 'success');
+        }
+
+        // ========== UTILITIES ==========
+        function saveHfKey() {
+            const key = document.getElementById('hfApiKey').value.trim();
+            if (key) { localStorage.setItem('hf_api_key', key); showToast('API key saved!', 'success'); }
+        }
+
+        function updateStatus(text, type = 'success') {
+            document.getElementById('statusText').textContent = text;
+            const dot = document.getElementById('statusDot');
+            dot.className = 'status-dot';
+            if (type === 'error') dot.classList.add('error');
+            if (type === 'warning') dot.classList.add('warning');
+        }
+
+        function showToast(message, type = 'error') {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.background = type === 'success' ? 'var(--success)' : 'var(--error)';
+            toast.style.borderColor = type === 'success' ? 'var(--success)' : 'var(--error)';
+            toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check' : 'exclamation'}-circle"></i> ${message}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        // ========== PRESETS ==========
+        const SETTINGS_IDS = [
+            'promptInput', 'negativePrompt',
+            'hfModel', 'hfGuidance',
+            'cfgScale', 'steps', 'imgSize',
+            'modalSteps', 'modalCfgScale', 'modalWidth', 'modalHeight',
+            'modalSeed', 'modalClipSkip', 'modalScheduler', 'modalBatchCount',
+            'modalAdetailer', 'modalAdModel', 'modalAdPrompt', 'modalAdNegative',
+            'modalAdStrength', 'modalAdSteps',
+            'modalHiresEnable', 'modalHiresUpscaler', 'modalHiresScale',
+            'modalHiresDenoising', 'modalHiresSteps',
+            'modalVae'
+        ];
+        const VAL_INPUT_IDS = [
+            'hfGuidanceVal', 'cfgVal', 'stepsVal',
+            'modalStepsVal', 'modalCfgVal', 'modalClipSkipVal',
+            'modalAdStrengthVal', 'modalAdStepsVal',
+            'modalHiresScaleVal', 'modalHiresDenoiseVal', 'modalHiresStepsVal'
+        ];
+
+        function gatherSettings() {
+            const settings = {};
+            SETTINGS_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (el.type === 'checkbox') settings[id] = el.checked;
+                else settings[id] = el.value;
+            });
+            settings._backend = currentBackend;
+            settings._modalLoras = JSON.parse(JSON.stringify(activeModalLoras));
+            return settings;
+        }
+
+        function applySettings(settings) {
+            SETTINGS_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el || settings[id] === undefined) return;
+                if (el.type === 'checkbox') el.checked = settings[id];
+                else el.value = settings[id];
+            });
+            // Sync number inputs with sliders
+            VAL_INPUT_IDS.forEach(valId => {
+                const valInput = document.getElementById(valId);
+                if (!valInput) return;
+                // Find the slider paired with this input
+                const sliderId = valId.replace('Val', '').replace('modalCfgVal', 'modalCfgScale').replace('cfgVal', 'cfgScale').replace('stepsVal', 'steps').replace('modalHiresDenoiseVal', 'modalHiresDenoising');
+                // Simpler: just use the slider pairs mapping
+            });
+            // Re-sync all slider<->input pairs
+            const sliderMap = {
+                'hfGuidance': 'hfGuidanceVal', 'cfgScale': 'cfgVal', 'steps': 'stepsVal',
+                'modalCfgScale': 'modalCfgVal', 'modalSteps': 'modalStepsVal',
+                'modalClipSkip': 'modalClipSkipVal', 'modalAdStrength': 'modalAdStrengthVal',
+                'modalAdSteps': 'modalAdStepsVal', 'modalHiresScale': 'modalHiresScaleVal',
+                'modalHiresDenoising': 'modalHiresDenoiseVal', 'modalHiresSteps': 'modalHiresStepsVal'
+            };
+            Object.entries(sliderMap).forEach(([sliderId, valId]) => {
+                const slider = document.getElementById(sliderId);
+                const valInput = document.getElementById(valId);
+                if (slider && valInput) valInput.value = slider.value;
+            });
+            // Restore backend
+            if (settings._backend) setBackend(settings._backend);
+            // Restore LoRAs
+            if (settings._modalLoras) {
+                activeModalLoras = settings._modalLoras;
+                updateActiveLorasDisplay();
+            }
+        }
+
+        // Auto-save on any change
+        function autoSaveSettings() {
+            localStorage.setItem('abiart_last_settings', JSON.stringify(gatherSettings()));
+        }
+        // Listen for changes on all settings
+        document.addEventListener('input', (e) => {
+            if (SETTINGS_IDS.includes(e.target.id) || VAL_INPUT_IDS.includes(e.target.id)) autoSaveSettings();
+        });
+        document.addEventListener('change', (e) => {
+            if (SETTINGS_IDS.includes(e.target.id)) autoSaveSettings();
+        });
+
+        function restoreLastSettings() {
+            const saved = localStorage.getItem('abiart_last_settings');
+            if (saved) {
+                try { applySettings(JSON.parse(saved)); } catch (e) { console.warn('Could not restore settings:', e); }
+            }
+        }
+
+        // Named presets
+        function getPresets() {
+            try { return JSON.parse(localStorage.getItem('abiart_presets') || '{}'); } catch (e) { return {}; }
+        }
+
+        function savePreset() {
+            const nameInput = document.getElementById('presetName');
+            const name = nameInput.value.trim();
+            if (!name) { showToast('Enter a preset name'); return; }
+            const presets = getPresets();
+            presets[name] = gatherSettings();
+            localStorage.setItem('abiart_presets', JSON.stringify(presets));
+            nameInput.value = '';
+            renderPresetList();
+            showToast(`Preset "${name}" saved!`, 'success');
+            autoSaveSettings();
+        }
+
+        function loadPreset(name) {
+            const presets = getPresets();
+            if (presets[name]) {
+                applySettings(presets[name]);
+                showToast(`Loaded "${name}"`, 'success');
+                autoSaveSettings();
+            }
+        }
+
+        function deletePreset(name) {
+            if (!confirm(`Delete preset "${name}"?`)) return;
+            const presets = getPresets();
+            delete presets[name];
+            localStorage.setItem('abiart_presets', JSON.stringify(presets));
+            renderPresetList();
+            showToast(`Deleted "${name}"`, 'success');
+        }
+
+        function renderPresetList() {
+            const container = document.getElementById('presetList');
+            const presets = getPresets();
+            const names = Object.keys(presets);
+            if (names.length === 0) {
+                container.innerHTML = '<p style="color:var(--muted);font-size:.7rem">No saved presets</p>';
+                return;
+            }
+            container.innerHTML = names.map(name => `
+                <div class="row" style="justify-content:space-between">
+                    <button class="btn btn-sm" onclick="loadPreset('${name.replace(/'/g, "\\'")}')"
+                        style="flex:1;justify-content:flex-start"><i class="fas fa-play"></i> ${name}</button>
+                    <button class="btn btn-sm btn-danger" onclick="deletePreset('${name.replace(/'/g, "\\'")}')"
+                        title="Delete">🗑</button>
+                </div>`).join('');
+        }
+    </script>
+</body>
+
+</html>
