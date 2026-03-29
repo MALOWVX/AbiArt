@@ -9,8 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
-# Expose port
-EXPOSE 5000
+# Railway injects $PORT at runtime
+EXPOSE ${PORT:-5000}
 
-# Run with gunicorn in production
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "300", "app:app"]
+# Shell form so $PORT is expanded by the shell
+CMD gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 2 --timeout 300 app:app
