@@ -275,6 +275,9 @@
                             <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
                                 <input type="checkbox" id="modalAdetailer"> Enable ADetailer
                             </label>
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem;margin-top:.3rem">
+                                <input type="checkbox" id="modalAdSameCheckpoint" checked> Use generation checkpoint
+                            </label>
                             <div class="field">
                                 <label class="field-label">Detection Model</label>
                                 <select id="modalAdModel">
@@ -1116,6 +1119,7 @@
                             vae: document.getElementById('modalVae').value,
                             batch_count: parseInt(document.getElementById('modalBatchCount').value) || 1,
                             adetailer_enabled: document.getElementById('modalAdetailer').checked,
+                            adetailer_same_checkpoint: document.getElementById('modalAdSameCheckpoint').checked,
                             adetailer_model: document.getElementById('modalAdModel').value,
                             adetailer_confidence: parseFloat(document.getElementById('modalAdConfidence').value),
                             adetailer_prompt: document.getElementById('modalAdPrompt').value,
@@ -1388,7 +1392,7 @@
             'cfgScale', 'steps', 'imgSize',
             'modalSteps', 'modalCfgScale', 'modalWidth', 'modalHeight',
             'modalSeed', 'modalClipSkip', 'modalScheduler', 'modalBatchCount',
-            'modalAdetailer', 'modalAdModel', 'modalAdPrompt', 'modalAdNegative',
+            'modalAdetailer', 'modalAdSameCheckpoint', 'modalAdModel', 'modalAdPrompt', 'modalAdNegative',
             'modalAdStrength', 'modalAdSteps',
             'modalHiresEnable', 'modalHiresUpscaler', 'modalHiresScale',
             'modalHiresDenoising', 'modalHiresSteps',

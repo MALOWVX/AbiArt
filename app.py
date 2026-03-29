@@ -325,6 +325,7 @@ def generate_modal():
         
         # ADetailer params
         adetailer_enabled = data.get('adetailer_enabled', False)
+        adetailer_same_checkpoint = data.get('adetailer_same_checkpoint', True)
         adetailer_model = data.get('adetailer_model', 'face_yolov8n.pt')
         adetailer_confidence = data.get('adetailer_confidence', 0.3)
         adetailer_prompt = data.get('adetailer_prompt', '')
@@ -367,6 +368,7 @@ def generate_modal():
             "vae": vae,
             "batch_count": batch_count,
             "adetailer_enabled": adetailer_enabled,
+            "adetailer_same_checkpoint": adetailer_same_checkpoint,
             "adetailer_model": adetailer_model,
             "adetailer_confidence": adetailer_confidence,
             "adetailer_prompt": adetailer_prompt,
