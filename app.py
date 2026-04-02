@@ -1,9 +1,3 @@
-"""
-AbiArt — AI Image Studio
-Stable Diffusion Web Interface
-Supports: Hugging Face API + Kaggle Backend + Modal with Civitai Models
-"""
-
 import os
 import json
 import base64
@@ -23,33 +17,82 @@ app.secret_key = os.environ.get('SECRET_KEY', 'abiart-secret-key-2024-change-me'
 # ===============================
 # DATABASE & AUTH
 # ===============================
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'abiart.db')
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+USE_POSTGRES = bool(DATABASE_URL)
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+    print(f"[DB] Using PostgreSQL")
+else:
+    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'abiart.db')
+    print(f"[DB] Using SQLite at {DB_PATH}")
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+
+def db_execute(conn, query, params=None):
+    """Execute a query with the correct placeholder syntax"""
+    if USE_POSTGRES:
+        # Convert ? placeholders to %s for PostgreSQL
+        query = query.replace('?', '%s')
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    else:
+        cur = conn.cursor()
+    cur.execute(query, params or ())
+    return cur
+
+
+def db_fetchone(conn, query, params=None):
+    cur = db_execute(conn, query, params)
+    row = cur.fetchone()
+    cur.close()
+    return row
+
+
+def db_fetchall(conn, query, params=None):
+    cur = db_execute(conn, query, params)
+    rows = cur.fetchall()
+    cur.close()
+    return rows
 
 
 def init_db():
     conn = get_db()
-    conn.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        images_remaining INTEGER DEFAULT 3,
-        is_admin BOOLEAN DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+    if USE_POSTGRES:
+        db_execute(conn, '''CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(100) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            images_remaining INTEGER DEFAULT 3,
+            is_admin BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+    else:
+        db_execute(conn, '''CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            images_remaining INTEGER DEFAULT 3,
+            is_admin BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
     conn.commit()
 
     # Seed admin account
     admin_user = os.environ.get('ADMIN_USERNAME', 'malowvx')
     admin_pass = os.environ.get('ADMIN_PASSWORD', 'zaza1140')
-    existing = conn.execute('SELECT id FROM users WHERE username = ?', (admin_user,)).fetchone()
+    existing = db_fetchone(conn, 'SELECT id FROM users WHERE username = ?', (admin_user,))
     if not existing:
-        conn.execute(
+        db_execute(conn,
             'INSERT INTO users (username, password_hash, images_remaining, is_admin) VALUES (?, ?, ?, ?)',
             (admin_user, generate_password_hash(admin_pass), -1, True)
         )
@@ -57,7 +100,7 @@ def init_db():
         print(f"[Auth] Admin account '{admin_user}' created")
     else:
         # Ensure admin always has admin flag and unlimited credits
-        conn.execute('UPDATE users SET is_admin = 1, images_remaining = -1 WHERE username = ?', (admin_user,))
+        db_execute(conn, 'UPDATE users SET is_admin = TRUE, images_remaining = -1 WHERE username = ?', (admin_user,))
         conn.commit()
     conn.close()
 
@@ -67,7 +110,7 @@ def get_current_user():
     if 'user_id' not in session:
         return None
     conn = get_db()
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    user = db_fetchone(conn, 'SELECT * FROM users WHERE id = ?', (session['user_id'],))
     conn.close()
     return user
 
@@ -89,10 +132,10 @@ def check_credits(image_count=1):
 def deduct_credits(user_id, image_count):
     """Deduct credits after successful generation"""
     conn = get_db()
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    user = db_fetchone(conn, 'SELECT * FROM users WHERE id = ?', (user_id,))
     if user and not user['is_admin']:
         new_remaining = max(0, user['images_remaining'] - image_count)
-        conn.execute('UPDATE users SET images_remaining = ? WHERE id = ?', (new_remaining, user_id))
+        db_execute(conn, 'UPDATE users SET images_remaining = ? WHERE id = ?', (new_remaining, user_id))
         conn.commit()
         print(f"[Auth] User '{user['username']}' used {image_count} credits, {new_remaining} remaining")
     conn.close()
@@ -152,15 +195,15 @@ def register():
         return jsonify({'error': 'Password must be at least 4 characters'}), 400
 
     conn = get_db()
-    existing = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+    existing = db_fetchone(conn, 'SELECT id FROM users WHERE username = ?', (username,))
     if existing:
         conn.close()
         return jsonify({'error': 'Username already taken'}), 400
 
-    conn.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)',
+    db_execute(conn, 'INSERT INTO users (username, password_hash) VALUES (?, ?)',
                  (username, generate_password_hash(password)))
     conn.commit()
-    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    user = db_fetchone(conn, 'SELECT * FROM users WHERE username = ?', (username,))
     conn.close()
 
     session['user_id'] = user['id']
@@ -183,7 +226,7 @@ def login():
     password = data.get('password', '')
 
     conn = get_db()
-    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    user = db_fetchone(conn, 'SELECT * FROM users WHERE username = ?', (username,))
     conn.close()
 
     if not user or not check_password_hash(user['password_hash'], password):
