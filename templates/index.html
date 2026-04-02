@@ -1304,7 +1304,17 @@
                 genInfo._final_prompt = finalPrompt; // Prompt with triggers sent to API
                 genInfo._negative = document.getElementById('negativePrompt').value;
                 genInfo._backend = currentBackend;
-                genInfo._loras = JSON.parse(JSON.stringify(activeModalLoras));
+                
+                if (currentBackend === 'modal') {
+                    genInfo._loras = JSON.parse(JSON.stringify(activeModalLoras));
+                    genInfo.model = document.getElementById('modalModel').value;
+                } else if (currentBackend === 'kaggle') {
+                    genInfo._loras = JSON.parse(JSON.stringify(activeLoRAs));
+                    genInfo._model = document.getElementById('kaggleModel').value;
+                } else if (currentBackend === 'huggingface') {
+                    genInfo._model = document.getElementById('hfModel').value;
+                    genInfo.guidance_scale = document.getElementById('hfGuidance').value;
+                }
                 if (data.info) {
                     const info = data.info;
                     const bar = document.getElementById('genInfoBar');
@@ -1475,26 +1485,57 @@
             const item = imageHistoryData[historyIndex];
             if (!item || !item.info) { showToast('No parameters to recycle'); return; }
             const info = item.info;
+            
+            // Switch backend if needed first, so the right backend is active
+            if (info._backend) setBackend(info._backend);
+
             // Restore prompt & negative
             if (info._prompt) document.getElementById('promptInput').value = info._prompt;
             if (info._negative !== undefined) document.getElementById('negativePrompt').value = info._negative;
-            // Restore Modal settings
-            if (info.seed !== undefined) document.getElementById('modalSeed').value = info.seed;
-            if (info.steps) { document.getElementById('modalSteps').value = info.steps; document.getElementById('modalStepsVal').value = info.steps; }
-            if (info.cfg_scale) { document.getElementById('modalCfgScale').value = info.cfg_scale; document.getElementById('modalCfgVal').value = info.cfg_scale; }
-            if (info.width) document.getElementById('modalWidth').value = info.width;
-            if (info.height) document.getElementById('modalHeight').value = info.height;
-            if (info.scheduler) document.getElementById('modalScheduler').value = info.scheduler;
-            if (info.clip_skip) { document.getElementById('modalClipSkip').value = info.clip_skip; document.getElementById('modalClipSkipVal').value = info.clip_skip; }
-            if (info.vae) document.getElementById('modalVae').value = info.vae;
-            // Restore LoRAs
-            if (info._loras) {
-                activeModalLoras = JSON.parse(JSON.stringify(info._loras));
-                updateActiveLorasDisplay();
+            
+            // Restore backend specific settings
+            if (currentBackend === 'modal') {
+                if (info.seed !== undefined) document.getElementById('modalSeed').value = info.seed;
+                if (info.steps) { document.getElementById('modalSteps').value = info.steps; document.getElementById('modalStepsVal').value = info.steps; }
+                if (info.cfg_scale) { document.getElementById('modalCfgScale').value = info.cfg_scale; document.getElementById('modalCfgVal').value = info.cfg_scale; }
+                if (info.width) document.getElementById('modalWidth').value = info.width;
+                if (info.height) document.getElementById('modalHeight').value = info.height;
+                if (info.scheduler) document.getElementById('modalScheduler').value = info.scheduler;
+                if (info.clip_skip) { document.getElementById('modalClipSkip').value = info.clip_skip; document.getElementById('modalClipSkipVal').value = info.clip_skip; }
+                if (info.vae) document.getElementById('modalVae').value = info.vae;
+                if (info.model || info._model) document.getElementById('modalModel').value = info.model || info._model;
+                // Restore LoRAs
+                if (info._loras) {
+                    activeModalLoras = JSON.parse(JSON.stringify(info._loras));
+                    updateActiveLorasDisplay();
+                }
+            } else if (currentBackend === 'kaggle') {
+                if (info.steps) { document.getElementById('steps').value = info.steps; document.getElementById('stepsVal').value = info.steps; }
+                if (info.cfg_scale) { document.getElementById('cfgScale').value = info.cfg_scale; document.getElementById('cfgVal').value = info.cfg_scale; }
+                if (info.width && info.height) {
+                    const sizeStr = `${info.width}x${info.height}`;
+                    const sizeSelect = document.getElementById('imgSize');
+                    if (Array.from(sizeSelect.options).some(opt => opt.value === sizeStr)) {
+                        sizeSelect.value = sizeStr;
+                    }
+                }
+                if (info.model || info._model) document.getElementById('kaggleModel').value = info.model || info._model;
+                if (info._loras) {
+                    activeLoRAs = JSON.parse(JSON.stringify(info._loras));
+                    updateLorasDisplay();
+                }
+            } else if (currentBackend === 'huggingface') {
+                if (info.guidance_scale || info.cfg_scale) { 
+                    const g = info.guidance_scale || info.cfg_scale;
+                    document.getElementById('hfGuidance').value = g; 
+                    document.getElementById('hfGuidanceVal').value = g; 
+                }
+                if (info.model || info._model) {
+                    document.getElementById('hfModel').value = info.model || info._model;
+                }
             }
-            // Switch backend if needed
-            if (info._backend) setBackend(info._backend);
-            autoSaveSettings();
+
+            if (typeof autoSaveSettings === 'function') autoSaveSettings();
             showToast('♻ Settings recycled!', 'success');
         }
 
