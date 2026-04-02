@@ -8,14 +8,98 @@ import os
 import json
 import base64
 import random
+import sqlite3
 import requests
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+app.secret_key = os.environ.get('SECRET_KEY', 'abiart-secret-key-2024-change-me')
+
+# ===============================
+# DATABASE & AUTH
+# ===============================
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'abiart.db')
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    conn.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        images_remaining INTEGER DEFAULT 3,
+        is_admin BOOLEAN DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    conn.commit()
+
+    # Seed admin account
+    admin_user = os.environ.get('ADMIN_USERNAME', 'malowvx')
+    admin_pass = os.environ.get('ADMIN_PASSWORD', 'zaza1140')
+    existing = conn.execute('SELECT id FROM users WHERE username = ?', (admin_user,)).fetchone()
+    if not existing:
+        conn.execute(
+            'INSERT INTO users (username, password_hash, images_remaining, is_admin) VALUES (?, ?, ?, ?)',
+            (admin_user, generate_password_hash(admin_pass), -1, True)
+        )
+        conn.commit()
+        print(f"[Auth] Admin account '{admin_user}' created")
+    else:
+        # Ensure admin always has admin flag and unlimited credits
+        conn.execute('UPDATE users SET is_admin = 1, images_remaining = -1 WHERE username = ?', (admin_user,))
+        conn.commit()
+    conn.close()
+
+
+def get_current_user():
+    """Get current logged-in user from session"""
+    if 'user_id' not in session:
+        return None
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    conn.close()
+    return user
+
+
+def check_credits(image_count=1):
+    """Check if user has enough credits. Returns (user, error_response) or (user, None)"""
+    user = get_current_user()
+    if not user:
+        return None, (jsonify({'error': 'Please log in to generate images'}), 401)
+    if user['is_admin']:
+        return user, None
+    if user['images_remaining'] < image_count:
+        return None, (jsonify({
+            'error': f'Not enough credits. You have {user["images_remaining"]} image(s) remaining, but this request needs {image_count}.'
+        }), 403)
+    return user, None
+
+
+def deduct_credits(user_id, image_count):
+    """Deduct credits after successful generation"""
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    if user and not user['is_admin']:
+        new_remaining = max(0, user['images_remaining'] - image_count)
+        conn.execute('UPDATE users SET images_remaining = ? WHERE id = ?', (new_remaining, user_id))
+        conn.commit()
+        print(f"[Auth] User '{user['username']}' used {image_count} credits, {new_remaining} remaining")
+    conn.close()
+
+
+# Initialize database on startup
+init_db()
 
 # Hugging Face Configuration
 HF_API_URL = "https://api-inference.huggingface.co/models/"
@@ -50,10 +134,103 @@ def index():
     return render_template('index.html')
 
 
+# ===============================
+# AUTH ROUTES
+# ===============================
+
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.json
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    if len(username) < 3:
+        return jsonify({'error': 'Username must be at least 3 characters'}), 400
+    if len(password) < 4:
+        return jsonify({'error': 'Password must be at least 4 characters'}), 400
+
+    conn = get_db()
+    existing = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({'error': 'Username already taken'}), 400
+
+    conn.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)',
+                 (username, generate_password_hash(password)))
+    conn.commit()
+    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    conn.close()
+
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+
+    return jsonify({
+        'success': True,
+        'user': {
+            'username': user['username'],
+            'images_remaining': user['images_remaining'],
+            'is_admin': bool(user['is_admin'])
+        }
+    })
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    conn.close()
+
+    if not user or not check_password_hash(user['password_hash'], password):
+        return jsonify({'error': 'Invalid username or password'}), 401
+
+    session['user_id'] = user['id']
+    session['username'] = user['username']
+
+    return jsonify({
+        'success': True,
+        'user': {
+            'username': user['username'],
+            'images_remaining': user['images_remaining'],
+            'is_admin': bool(user['is_admin'])
+        }
+    })
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def get_me():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Not logged in'}), 401
+    return jsonify({
+        'user': {
+            'username': user['username'],
+            'images_remaining': user['images_remaining'],
+            'is_admin': bool(user['is_admin'])
+        }
+    })
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'success': True})
+
+
 @app.route('/generate', methods=['POST'])
 def generate_hf():
     """Generate image using Hugging Face API"""
     try:
+        # Credit check (HF generates 1 image)
+        user, err = check_credits(1)
+        if err:
+            return err
+
         data = request.json
         prompt = data.get('prompt', '')
         negative_prompt = data.get('negative_prompt', '')
@@ -96,6 +273,7 @@ def generate_hf():
             return jsonify({'error': err}), response.status_code
 
         image_base64 = base64.b64encode(response.content).decode('utf-8')
+        deduct_credits(user['id'], 1)
         return jsonify({'success': True, 'image': image_base64})
 
     except requests.exceptions.Timeout:
@@ -147,6 +325,11 @@ def get_kaggle_models():
 def generate_kaggle():
     """Generate image using Kaggle backend"""
     try:
+        # Credit check (Kaggle generates 1 image)
+        user, err = check_credits(1)
+        if err:
+            return err
+
         data = request.json
         url = data.get('url', '').rstrip('/')
         prompt = data.get('prompt', '')
@@ -199,6 +382,7 @@ def generate_kaggle():
         if response.status_code == 200:
             result = response.json()
             if 'images' in result and len(result['images']) > 0:
+                deduct_credits(user['id'], 1)
                 return jsonify({
                     'success': True,
                     'image': result['images'][0]
@@ -304,6 +488,13 @@ def generate_modal():
     """Generate image using Modal backend"""
     try:
         data = request.json
+        batch_count = data.get('batch_count', 1)
+
+        # Credit check (Modal counts per image in batch)
+        user, err = check_credits(batch_count)
+        if err:
+            return err
+
         prompt = data.get('prompt', '')
         negative_prompt = data.get('negative_prompt', '')
         cfg_scale = data.get('cfg_scale', 7)
@@ -332,7 +523,6 @@ def generate_modal():
         adetailer_negative = data.get('adetailer_negative', '')
         adetailer_strength = data.get('adetailer_strength', 0.4)
         adetailer_steps = data.get('adetailer_steps', 25)
-        batch_count = data.get('batch_count', 1)
 
         # Hi-Res Fix params
         enable_hr = data.get('enable_hr', False)
@@ -391,6 +581,9 @@ def generate_modal():
         if response.status_code == 200:
             result = response.json()
             if 'image' in result:
+                # Count actual images generated
+                actual_images = len(result.get('images', [result['image']]))
+                deduct_credits(user['id'], actual_images)
                 resp = {
                     'success': True,
                     'image': result['image'],
@@ -398,6 +591,13 @@ def generate_modal():
                 }
                 if 'images' in result:
                     resp['images'] = result['images']
+                # Include updated credits in response
+                updated_user = get_current_user()
+                if updated_user:
+                    resp['credits'] = {
+                        'images_remaining': updated_user['images_remaining'],
+                        'is_admin': bool(updated_user['is_admin'])
+                    }
                 return jsonify(resp)
             else:
                 return jsonify({'error': 'No image in response'}), 500

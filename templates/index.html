@@ -15,6 +15,36 @@
 
 <body>
 
+    <!-- Auth Overlay -->
+    <div id="authOverlay" class="auth-overlay">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <div class="logo-icon" style="width:48px;height:48px;font-size:1.5rem"><i class="fas fa-wand-magic-sparkles"></i></div>
+                <h1 style="font-family:Graduate,serif;font-size:1.8rem;margin:.5rem 0 0">AbiArt</h1>
+                <p style="color:var(--muted);font-size:.75rem;margin:.25rem 0 0">AI Image Studio</p>
+            </div>
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+                <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+            </div>
+            <form id="authForm" onsubmit="handleAuth(event)">
+                <div class="auth-field">
+                    <label>Username</label>
+                    <input type="text" id="authUsername" placeholder="Enter your username" autocomplete="username" required minlength="3">
+                </div>
+                <div class="auth-field">
+                    <label>Password</label>
+                    <input type="password" id="authPassword" placeholder="Enter your password" autocomplete="current-password" required minlength="4">
+                </div>
+                <button type="submit" class="auth-submit" id="authSubmitBtn">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+                <p id="authError" class="auth-error"></p>
+                <p class="auth-info"><i class="fas fa-gift"></i> New accounts get <strong>3 free images</strong></p>
+            </form>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="header">
         <div class="logo">
@@ -29,6 +59,11 @@
                         class="fas fa-server"></i> Kaggle</button>
                 <button class="backend-btn" data-backend="modal" onclick="setBackend('modal')"><i
                         class="fas fa-bolt"></i> Modal</button>
+            </div>
+            <div class="user-badge" id="userBadge" style="display:none">
+                <span class="credits-display" id="creditsDisplay" title="Images remaining"><i class="fas fa-image"></i> <span id="creditsCount">3</span></span>
+                <span class="user-name" id="userName"></span>
+                <button class="user-logout" onclick="logoutUser()" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
             </div>
             <div class="status-badge">
                 <span class="status-dot" id="statusDot"></span>
@@ -484,9 +519,102 @@
         let currentModelTab = 'checkpoints';
         let currentImage = null;
         let activeModalLoras = [];
+        let currentUser = null;
+        let authMode = 'login';
+
+        // ========== AUTH ==========
+        function switchAuthTab(mode) {
+            authMode = mode;
+            document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            const btn = document.getElementById('authSubmitBtn');
+            btn.innerHTML = mode === 'login' ? '<i class="fas fa-sign-in-alt"></i> Login' : '<i class="fas fa-user-plus"></i> Create Account';
+            document.getElementById('authError').textContent = '';
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const username = document.getElementById('authUsername').value.trim();
+            const password = document.getElementById('authPassword').value;
+            const errorEl = document.getElementById('authError');
+            const btn = document.getElementById('authSubmitBtn');
+            errorEl.textContent = '';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+
+            try {
+                const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await resp.json();
+                if (data.success && data.user) {
+                    currentUser = data.user;
+                    showApp();
+                } else {
+                    errorEl.textContent = data.error || 'Authentication failed';
+                }
+            } catch (err) {
+                errorEl.textContent = 'Connection error. Please try again.';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = authMode === 'login' ? '<i class="fas fa-sign-in-alt"></i> Login' : '<i class="fas fa-user-plus"></i> Create Account';
+            }
+        }
+
+        async function checkSession() {
+            try {
+                const resp = await fetch('/api/auth/me');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.user) {
+                        currentUser = data.user;
+                        showApp();
+                        return;
+                    }
+                }
+            } catch (e) { }
+            // Not logged in — show auth overlay
+            document.getElementById('authOverlay').style.display = 'flex';
+        }
+
+        function showApp() {
+            document.getElementById('authOverlay').style.display = 'none';
+            updateUserBadge();
+        }
+
+        function updateUserBadge() {
+            if (!currentUser) return;
+            const badge = document.getElementById('userBadge');
+            badge.style.display = 'flex';
+            document.getElementById('userName').textContent = currentUser.username;
+            const creditsEl = document.getElementById('creditsCount');
+            const creditsDisplay = document.getElementById('creditsDisplay');
+            if (currentUser.is_admin) {
+                creditsEl.textContent = '∞';
+                creditsDisplay.title = 'Admin — Unlimited';
+                creditsDisplay.style.color = 'var(--accent2)';
+            } else {
+                creditsEl.textContent = currentUser.images_remaining;
+                creditsDisplay.title = `${currentUser.images_remaining} image(s) remaining`;
+                creditsDisplay.style.color = currentUser.images_remaining > 0 ? 'var(--success)' : 'var(--error)';
+            }
+        }
+
+        async function logoutUser() {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) { }
+            currentUser = null;
+            document.getElementById('userBadge').style.display = 'none';
+            document.getElementById('authOverlay').style.display = 'flex';
+            document.getElementById('authUsername').value = '';
+            document.getElementById('authPassword').value = '';
+        }
 
         // ========== INIT ==========
         document.addEventListener('DOMContentLoaded', () => {
+            checkSession();
             const storedKey = localStorage.getItem('hf_api_key');
             if (storedKey) document.getElementById('hfApiKey').value = storedKey;
             if (kaggleUrl) document.getElementById('kaggleUrl').value = kaggleUrl;
@@ -1205,6 +1333,17 @@
                 });
                 updateStatus('Ready', 'success');
                 showToast('Image generated!', 'success');
+                // Update credits after generation
+                if (data.credits) {
+                    currentUser.images_remaining = data.credits.images_remaining;
+                    currentUser.is_admin = data.credits.is_admin;
+                    updateUserBadge();
+                } else {
+                    try {
+                        const meResp = await fetch('/api/auth/me');
+                        if (meResp.ok) { const meData = await meResp.json(); if (meData.user) { currentUser = meData.user; updateUserBadge(); } }
+                    } catch (ue) { }
+                }
             } catch (e) {
                 outputArea.innerHTML = `<div class="placeholder"><i class="fas fa-exclamation-triangle" style="color:var(--error)"></i><p>${e.message}</p></div>`;
                 updateStatus('Error', 'error');
