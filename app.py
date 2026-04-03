@@ -762,6 +762,75 @@ def delete_modal_file():
         return jsonify({'error': str(e)}), 500
 
 
+# ===============================
+# TOOLS ROUTES
+# ===============================
+_wd_tagger_client = None
+
+
+@app.route('/api/tools/tag-image', methods=['POST'])
+def tool_tag_image():
+    """Tag an image with Danbooru-style tags using WD Tagger"""
+    import tempfile
+
+    data = request.json
+    image_b64 = data.get('image', '')
+    threshold = float(data.get('threshold', 0.35))
+
+    if not image_b64:
+        return jsonify({'error': 'No image provided'}), 400
+
+    tmp_path = None
+    try:
+        from gradio_client import Client, handle_file
+
+        global _wd_tagger_client
+        if _wd_tagger_client is None:
+            print("[Tools] Initializing WD Tagger client...")
+            _wd_tagger_client = Client("SmilingWolf/wd-tagger")
+
+        # Save to temp file
+        image_bytes = base64.b64decode(image_b64)
+        tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+        tmp.write(image_bytes)
+        tmp.close()
+        tmp_path = tmp.name
+
+        result = _wd_tagger_client.predict(
+            image=handle_file(tmp_path),
+            model_repo="SmilingWolf/wd-swinv2-tagger-v3",
+            general_thresh=threshold,
+            general_mcut_enabled=False,
+            character_thresh=0.85,
+            character_mcut_enabled=False,
+            api_name="/predict"
+        )
+
+        # Parse result — typically (tags_string, rating_html, char_html, general_html)
+        tags_string = ''
+        if isinstance(result, (list, tuple)) and len(result) > 0:
+            tags_string = str(result[0]) if result[0] else ''
+        elif isinstance(result, str):
+            tags_string = result
+
+        tags = [t.strip() for t in tags_string.split(',') if t.strip()]
+        print(f"[Tools] Tagged image: {len(tags)} tags")
+
+        return jsonify({'success': True, 'tags': tags, 'tags_string': ', '.join(tags)})
+
+    except ImportError:
+        return jsonify({'error': 'Tagger not available (gradio_client not installed)'}), 500
+    except Exception as e:
+        print(f"[Tools] Tagger error: {str(e)}")
+        return jsonify({'error': f'Tagging failed: {str(e)}'}), 500
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('FLASK_PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'

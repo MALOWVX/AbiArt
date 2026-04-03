@@ -45,6 +45,101 @@
         </div>
     </div>
 
+    <!-- Tools Panel Overlay -->
+    <div id="toolsPanel" class="tools-overlay" style="display:none">
+        <div class="tools-container">
+            <div class="tools-header">
+                <div style="display:flex;align-items:center;gap:.5rem">
+                    <i class="fas fa-wrench" style="color:var(--accent)"></i>
+                    <h2 style="font-family:Graduate,serif;font-size:1.2rem;margin:0">Tools</h2>
+                </div>
+                <button class="tools-close" onclick="closeTools()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="tools-tabs">
+                <button class="tool-tab active" data-tool="tagger" onclick="switchTool('tagger')"><i class="fas fa-tags"></i> Image → Tags</button>
+                <button class="tool-tab" data-tool="metadata" onclick="switchTool('metadata')"><i class="fas fa-file-alt"></i> Metadata</button>
+                <button class="tool-tab" data-tool="weights" onclick="switchTool('weights')"><i class="fas fa-balance-scale"></i> Weights</button>
+            </div>
+            <div class="tools-body">
+
+                <!-- Tool 1: Image Tagger -->
+                <div id="tool_tagger" class="tool-panel">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Upload an image to generate Danbooru-style tags using WD Tagger AI. Tags are compatible with A1111/Forge prompts.</p>
+                    <div class="tool-drop-zone" id="taggerDropZone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Drop image or click to upload</p>
+                        <input type="file" id="taggerFileInput" accept="image/*" hidden>
+                    </div>
+                    <div id="taggerPreview" style="display:none;text-align:center;margin:.75rem 0">
+                        <img id="taggerPreviewImg" style="max-height:180px;max-width:100%;border:1px solid var(--dim)">
+                    </div>
+                    <div style="display:flex;gap:.75rem;align-items:center;margin:.5rem 0">
+                        <label style="font-size:.7rem;color:var(--muted);white-space:nowrap">Threshold</label>
+                        <input type="range" id="taggerThreshold" min="0.1" max="0.9" step="0.05" value="0.35" style="flex:1"
+                            oninput="document.getElementById('taggerThreshVal').textContent=this.value">
+                        <span id="taggerThreshVal" style="font-size:.7rem;color:var(--accent2);width:2rem">0.35</span>
+                    </div>
+                    <button class="btn-accent" onclick="runTagger()" id="taggerBtn" style="margin:.5rem 0">
+                        <i class="fas fa-tags"></i> Generate Tags
+                    </button>
+                    <div id="taggerResult" style="display:none">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin:.75rem 0 .5rem">
+                            <h3 style="font-family:Graduate,serif;font-size:.9rem;margin:0">Generated Tags</h3>
+                            <div style="display:flex;gap:.3rem">
+                                <button class="btn btn-sm" onclick="copyTaggerTags()"><i class="fas fa-copy"></i> Copy</button>
+                                <button class="btn btn-sm" onclick="sendTagsToPrompt()" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
+                            </div>
+                        </div>
+                        <div id="taggerTags" class="tag-cloud"></div>
+                        <textarea id="taggerTagsText" rows="3" style="margin-top:.5rem" readonly></textarea>
+                    </div>
+                </div>
+
+                <!-- Tool 2: Metadata Reader -->
+                <div id="tool_metadata" class="tool-panel" style="display:none">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Drop an AI-generated PNG to read its embedded generation parameters (A1111, Forge, ComfyUI).</p>
+                    <div class="tool-drop-zone" id="metadataDropZone">
+                        <i class="fas fa-file-image"></i>
+                        <p>Drop a PNG file</p>
+                        <input type="file" id="metadataFileInput" accept=".png" hidden>
+                    </div>
+                    <div id="metadataResult" style="display:none">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin:.75rem 0 .5rem">
+                            <h3 style="font-family:Graduate,serif;font-size:.9rem;margin:0">Generation Parameters</h3>
+                            <div style="display:flex;gap:.3rem">
+                                <button class="btn btn-sm" onclick="loadMetadataSettings()"><i class="fas fa-cog"></i> Load Settings</button>
+                                <button class="btn btn-sm" onclick="toggleMetadataRaw()"><i class="fas fa-code"></i> Raw</button>
+                            </div>
+                        </div>
+                        <div id="metadataContent"></div>
+                        <div id="metadataRaw" style="display:none;margin-top:.75rem">
+                            <pre id="metadataRawText" style="font-size:.6rem;max-height:200px;overflow:auto;padding:.5rem;background:var(--bg);border:1px solid var(--dim);color:var(--muted)"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tool 3: Prompt Weight Helper -->
+                <div id="tool_weights" class="tool-panel" style="display:none">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Paste a comma-separated prompt and visually adjust (tag:weight) values for each token.</p>
+                    <textarea id="weightInput" placeholder="Paste prompt here, e.g: 1girl, blue hair, school uniform, masterpiece" rows="3"></textarea>
+                    <button class="btn btn-sm" onclick="parseWeightTokens()" style="margin:.5rem 0">
+                        <i class="fas fa-cog"></i> Parse Tokens
+                    </button>
+                    <div id="weightTokens" class="weight-tokens"></div>
+                    <div id="weightOutput" style="display:none;margin-top:.75rem">
+                        <label style="font-size:.7rem;color:var(--muted);display:block;margin-bottom:.25rem">Formatted Output</label>
+                        <textarea id="weightOutputText" rows="3" readonly></textarea>
+                        <div style="display:flex;gap:.3rem;margin-top:.5rem">
+                            <button class="btn btn-sm" onclick="copyWeightOutput()"><i class="fas fa-copy"></i> Copy</button>
+                            <button class="btn btn-sm" onclick="sendWeightToPrompt()" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="header">
         <div class="logo">
@@ -60,6 +155,7 @@
                 <button class="backend-btn" data-backend="modal" onclick="setBackend('modal')"><i
                         class="fas fa-bolt"></i> Modal</button>
             </div>
+            <button class="tools-btn" onclick="openTools()" title="Tools"><i class="fas fa-wrench"></i> Tools</button>
             <div class="user-badge" id="userBadge" style="display:none">
                 <span class="credits-display" id="creditsDisplay" title="Images remaining"><i class="fas fa-image"></i> <span id="creditsCount">3</span></span>
                 <span class="user-name" id="userName"></span>
@@ -1720,6 +1816,257 @@
                         title="Delete">🗑</button>
                 </div>`).join('');
         }
+
+        // ========== TOOLS ==========
+        let currentTool = 'tagger';
+        let _taggerImageB64 = null;
+        let _metadataParsed = null;
+
+        function openTools() {
+            document.getElementById('toolsPanel').style.display = 'flex';
+        }
+        function closeTools() {
+            document.getElementById('toolsPanel').style.display = 'none';
+        }
+        function switchTool(name) {
+            currentTool = name;
+            document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tool-tab[data-tool="${name}"]`).classList.add('active');
+            document.querySelectorAll('.tool-panel').forEach(p => p.style.display = 'none');
+            document.getElementById('tool_' + name).style.display = 'block';
+        }
+
+        // --- Tool 1: Image Tagger ---
+        function initTaggerDrop() {
+            const zone = document.getElementById('taggerDropZone');
+            const inp = document.getElementById('taggerFileInput');
+            if (!zone) return;
+            zone.onclick = () => inp.click();
+            zone.ondragover = e => { e.preventDefault(); zone.classList.add('drag-over'); };
+            zone.ondragleave = () => zone.classList.remove('drag-over');
+            zone.ondrop = e => { e.preventDefault(); zone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) loadTaggerImage(e.dataTransfer.files[0]); };
+            inp.onchange = e => { if (e.target.files[0]) loadTaggerImage(e.target.files[0]); };
+        }
+        function loadTaggerImage(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const b64 = e.target.result.split(',')[1];
+                _taggerImageB64 = b64;
+                document.getElementById('taggerPreview').style.display = 'block';
+                document.getElementById('taggerPreviewImg').src = e.target.result;
+                document.getElementById('taggerResult').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+        async function runTagger() {
+            if (!_taggerImageB64) { showToast('Upload an image first'); return; }
+            const btn = document.getElementById('taggerBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Tagging...';
+            try {
+                const threshold = parseFloat(document.getElementById('taggerThreshold').value);
+                const resp = await fetch('/api/tools/tag-image', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ image: _taggerImageB64, threshold })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                const tags = data.tags || [];
+                document.getElementById('taggerTags').innerHTML = tags.map(t =>
+                    `<span class="tag-chip" onclick="this.classList.toggle('selected')">${t.replace(/_/g,' ')}</span>`
+                ).join('');
+                document.getElementById('taggerTagsText').value = data.tags_string || tags.join(', ');
+                document.getElementById('taggerResult').style.display = 'block';
+                showToast(`${tags.length} tags found!`, 'success');
+            } catch (e) { showToast('Tagger: ' + e.message); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-tags"></i> Generate Tags'; }
+        }
+        function copyTaggerTags() {
+            const txt = document.getElementById('taggerTagsText').value;
+            navigator.clipboard.writeText(txt); showToast('Tags copied!', 'success');
+        }
+        function sendTagsToPrompt() {
+            const txt = document.getElementById('taggerTagsText').value;
+            document.getElementById('promptInput').value = txt;
+            closeTools(); showToast('Tags sent to prompt!', 'success');
+        }
+
+        // --- Tool 2: Metadata Reader ---
+        function initMetadataDrop() {
+            const zone = document.getElementById('metadataDropZone');
+            const inp = document.getElementById('metadataFileInput');
+            if (!zone) return;
+            zone.onclick = () => inp.click();
+            zone.ondragover = e => { e.preventDefault(); zone.classList.add('drag-over'); };
+            zone.ondragleave = () => zone.classList.remove('drag-over');
+            zone.ondrop = e => { e.preventDefault(); zone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) readMetadataFile(e.dataTransfer.files[0]); };
+            inp.onchange = e => { if (e.target.files[0]) readMetadataFile(e.target.files[0]); };
+        }
+        function readMetadataFile(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const buf = e.target.result;
+                const meta = parsePNGChunks(buf);
+                if (!meta || Object.keys(meta).length === 0) {
+                    showToast('No metadata found in this image'); return;
+                }
+                _metadataParsed = null;
+                const paramText = meta['parameters'] || meta['prompt'] || meta['Comment'] || '';
+                document.getElementById('metadataRawText').textContent = JSON.stringify(meta, null, 2);
+                document.getElementById('metadataRaw').style.display = 'block';
+                document.getElementById('metadataResult').style.display = 'block';
+                if (paramText && !paramText.startsWith('{')) {
+                    const parsed = parseA1111Params(paramText);
+                    _metadataParsed = parsed;
+                    renderParsedMetadata(parsed);
+                } else if (paramText.startsWith('{')) {
+                    try {
+                        const j = JSON.parse(paramText);
+                        document.getElementById('metadataContent').innerHTML =
+                            '<p style="color:var(--muted);font-size:.75rem">ComfyUI workflow detected</p>' +
+                            '<pre style="font-size:.65rem;max-height:300px;overflow:auto;color:var(--text)">' + JSON.stringify(j,null,2) + '</pre>';
+                    } catch { document.getElementById('metadataContent').innerHTML = '<p>Could not parse metadata</p>'; }
+                } else {
+                    document.getElementById('metadataContent').innerHTML = '<p style="color:var(--muted)">Unknown metadata format</p>';
+                }
+                showToast('Metadata loaded!', 'success');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        function parsePNGChunks(buf) {
+            const view = new DataView(buf);
+            const sig = [0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A];
+            for (let i = 0; i < 8; i++) { if (view.getUint8(i) !== sig[i]) return null; }
+            let off = 8; const meta = {};
+            while (off < view.byteLength) {
+                const len = view.getUint32(off);
+                const type = String.fromCharCode(view.getUint8(off+4),view.getUint8(off+5),view.getUint8(off+6),view.getUint8(off+7));
+                if (type === 'tEXt') {
+                    const d = new Uint8Array(buf, off+8, len);
+                    const ni = d.indexOf(0);
+                    const key = new TextDecoder().decode(d.slice(0, ni));
+                    const val = new TextDecoder().decode(d.slice(ni+1));
+                    meta[key] = val;
+                } else if (type === 'iTXt') {
+                    const d = new Uint8Array(buf, off+8, len);
+                    const ni = d.indexOf(0);
+                    const key = new TextDecoder().decode(d.slice(0, ni));
+                    let ti = ni+1;
+                    for (let nc=0; nc<4 && ti<d.length; ti++) { if (d[ti]===0) nc++; }
+                    meta[key] = new TextDecoder().decode(d.slice(ti));
+                }
+                if (type === 'IEND') break;
+                off += 12 + len;
+            }
+            return meta;
+        }
+        function parseA1111Params(text) {
+            const lines = text.split('\n');
+            const r = { prompt:'', negative:'', params:{} };
+            let section = 'prompt';
+            for (const line of lines) {
+                if (line.startsWith('Negative prompt:')) {
+                    section = 'negative'; r.negative = line.substring(16).trim();
+                } else if (/^Steps:\s*\d/.test(line)) {
+                    section = 'params';
+                    line.split(',').forEach(pair => {
+                        const ci = pair.indexOf(':');
+                        if (ci > 0) r.params[pair.substring(0,ci).trim()] = pair.substring(ci+1).trim();
+                    });
+                } else if (section === 'prompt') {
+                    r.prompt += (r.prompt ? '\n' : '') + line;
+                } else if (section === 'negative') {
+                    r.negative += '\n' + line;
+                }
+            }
+            return r;
+        }
+        function renderParsedMetadata(p) {
+            let h = '<div class="meta-grid">';
+            h += `<div class="meta-field"><label>Prompt</label><div class="meta-val">${p.prompt || '—'}</div></div>`;
+            h += `<div class="meta-field"><label>Negative</label><div class="meta-val">${p.negative || '—'}</div></div>`;
+            const paramKeys = ['Steps','Sampler','CFG scale','Seed','Size','Model','Model hash','Clip skip','VAE','Denoising strength','Hires upscaler','Hires upscale'];
+            const grid = paramKeys.filter(k => p.params[k]).map(k =>
+                `<div class="meta-param"><span class="meta-key">${k}</span><span class="meta-pval">${p.params[k]}</span></div>`
+            ).join('');
+            if (grid) h += `<div class="meta-params-grid">${grid}</div>`;
+            h += '</div>';
+            document.getElementById('metadataContent').innerHTML = h;
+        }
+        function loadMetadataSettings() {
+            if (!_metadataParsed) { showToast('No parsed settings to load'); return; }
+            const p = _metadataParsed;
+            if (p.prompt) document.getElementById('promptInput').value = p.prompt;
+            if (p.negative) document.getElementById('negativePrompt').value = p.negative;
+            if (p.params['Seed']) document.getElementById('modalSeed').value = p.params['Seed'];
+            if (p.params['Steps']) { document.getElementById('modalSteps').value = p.params['Steps']; document.getElementById('modalStepsVal').value = p.params['Steps']; }
+            if (p.params['CFG scale']) { document.getElementById('modalCfgScale').value = p.params['CFG scale']; document.getElementById('modalCfgVal').value = p.params['CFG scale']; }
+            if (p.params['Sampler']) document.getElementById('modalScheduler').value = p.params['Sampler'];
+            if (p.params['Clip skip']) { document.getElementById('modalClipSkip').value = p.params['Clip skip']; document.getElementById('modalClipSkipVal').value = p.params['Clip skip']; }
+            if (p.params['Size']) {
+                const [w,h] = p.params['Size'].split('x');
+                if (w) document.getElementById('modalWidth').value = w;
+                if (h) document.getElementById('modalHeight').value = h;
+            }
+            setBackend('modal');
+            closeTools();
+            showToast('Settings loaded from metadata!', 'success');
+        }
+        function toggleMetadataRaw() {
+            const el = document.getElementById('metadataRaw');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // --- Tool 3: Prompt Weight Helper ---
+        let _weightTokens = [];
+        function parseWeightTokens() {
+            const input = document.getElementById('weightInput').value.trim();
+            if (!input) { showToast('Enter a prompt first'); return; }
+            const parts = input.split(',').map(s => s.trim()).filter(Boolean);
+            _weightTokens = parts.map(tag => {
+                const m = tag.match(/^\((.+):([\d.]+)\)$/);
+                return m ? { text: m[1], weight: parseFloat(m[2]) } : { text: tag.replace(/^\(|\)$/g,''), weight: 1.0 };
+            });
+            renderWeightTokens();
+        }
+        function renderWeightTokens() {
+            const c = document.getElementById('weightTokens');
+            c.innerHTML = _weightTokens.map((t, i) => `
+                <div class="wt-chip ${t.weight !== 1.0 ? 'weighted' : ''}">
+                    <span class="wt-text">${t.text}</span>
+                    <span class="wt-val">${t.weight.toFixed(2)}</span>
+                    <div class="wt-btns">
+                        <button onclick="adjustWt(${i},-0.05)">−</button>
+                        <button onclick="adjustWt(${i},0.05)">+</button>
+                        <button onclick="removeWt(${i})" class="wt-del">✕</button>
+                    </div>
+                </div>
+            `).join('');
+            updateWeightOutput();
+        }
+        function adjustWt(i, delta) {
+            _weightTokens[i].weight = Math.max(0.05, Math.round((_weightTokens[i].weight + delta) * 100) / 100);
+            renderWeightTokens();
+        }
+        function removeWt(i) {
+            _weightTokens.splice(i, 1); renderWeightTokens();
+        }
+        function updateWeightOutput() {
+            if (_weightTokens.length === 0) { document.getElementById('weightOutput').style.display = 'none'; return; }
+            const out = _weightTokens.map(t => t.weight === 1.0 ? t.text : `(${t.text}:${t.weight.toFixed(2)})`).join(', ');
+            document.getElementById('weightOutputText').value = out;
+            document.getElementById('weightOutput').style.display = 'block';
+        }
+        function copyWeightOutput() {
+            navigator.clipboard.writeText(document.getElementById('weightOutputText').value);
+            showToast('Copied!', 'success');
+        }
+        function sendWeightToPrompt() {
+            document.getElementById('promptInput').value = document.getElementById('weightOutputText').value;
+            closeTools(); showToast('Prompt updated!', 'success');
+        }
+
+        // Init tools drop zones
+        document.addEventListener('DOMContentLoaded', () => { initTaggerDrop(); initMetadataDrop(); });
     </script>
 </body>
 

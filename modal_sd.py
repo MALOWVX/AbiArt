@@ -504,6 +504,14 @@ class StableDiffusion:
 
             filepath = f"{target_dir}/{filename}"
 
+            # A1111 often returns names without extension — try with common extensions
+            if not os.path.exists(filepath):
+                for ext in ('.safetensors', '.ckpt', '.pt'):
+                    candidate = f"{target_dir}/{filename}{ext}"
+                    if os.path.exists(candidate):
+                        filepath = candidate
+                        break
+
             if os.path.exists(filepath):
                 os.remove(filepath)
                 volume.commit()
@@ -515,7 +523,7 @@ class StableDiffusion:
                 except:
                     pass
 
-                print(f"Deleted {file_type}: {filename}")
+                print(f"Deleted {file_type}: {os.path.basename(filepath)}")
                 return {"success": True}
             else:
                 return {"error": f"File not found: {filename}"}
