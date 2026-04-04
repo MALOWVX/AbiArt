@@ -831,6 +831,96 @@ def tool_tag_image():
                 pass
 
 
+@app.route('/api/tools/char-to-prompt', methods=['POST'])
+def tool_char_to_prompt():
+    """Convert character description to SD prompt using GLM 4.7"""
+    data = request.json
+    description = data.get('description', '').strip()
+    style = data.get('style', 'anime')  # anime, realistic, fantasy
+
+    if not description:
+        return jsonify({'error': 'No description provided'}), 400
+
+    glm_url = os.environ.get('GLM_API_URL', '')
+    glm_key = os.environ.get('GLM_API_KEY', '')
+
+    if not glm_url:
+        return jsonify({'error': 'GLM API not configured (set GLM_API_URL)'}), 500
+
+    # Build the endpoint
+    api_endpoint = glm_url.rstrip('/') + '/v1/chat/completions'
+
+    style_hints = {
+        'anime': 'Use Danbooru/booru-style tags. Include anime-specific quality tags like masterpiece, best quality, highres.',
+        'realistic': 'Use tags suited for photorealistic models. Include tags like photo, realistic, detailed skin, professional lighting.',
+        'fantasy': 'Use tags for fantasy illustration style. Include tags like fantasy, dramatic lighting, epic composition, painted style.'
+    }
+
+    system_prompt = f"""You are an expert Stable Diffusion prompt engineer. Convert the user's character description into an optimized comma-separated tag prompt for image generation.
+
+Rules:
+1. Output ONLY comma-separated tags, nothing else. No explanations, no markdown.
+2. {style_hints.get(style, style_hints['anime'])}
+3. Start with subject count (1girl, 1boy, 2girls, etc.)
+4. Include: hair (color, style, length), eyes (color), expression, clothing, pose, background, lighting
+5. Add quality boosters at the end: masterpiece, best quality, highres, absurdres
+6. Use underscores for multi-word tags (e.g. blue_hair, school_uniform)
+7. Include a negative prompt on a second line starting with "NEGATIVE:" with common bad tags
+8. Keep the prompt between 20-50 tags
+9. Be specific and descriptive based on what the user describes"""
+
+    try:
+        headers = {'Content-Type': 'application/json'}
+        if glm_key:
+            headers['Authorization'] = f'Bearer {glm_key}'
+
+        payload = {
+            'model': data.get('model', 'glm-4'),
+            'messages': [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': description}
+            ],
+            'temperature': 0.7,
+            'max_tokens': 500
+        }
+
+        resp = requests.post(api_endpoint, json=payload, headers=headers, timeout=30)
+
+        if resp.status_code != 200:
+            print(f"[Tools] GLM error: {resp.status_code} {resp.text[:200]}")
+            return jsonify({'error': f'GLM API error: {resp.status_code}'}), 500
+
+        result = resp.json()
+        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        # Parse positive and negative prompts
+        lines = content.strip().split('\n')
+        positive = ''
+        negative = ''
+        for line in lines:
+            stripped = line.strip()
+            if stripped.upper().startswith('NEGATIVE:'):
+                negative = stripped[9:].strip()
+            elif stripped and not positive:
+                positive = stripped
+            elif stripped and positive and not negative:
+                # Could be continuation of positive
+                positive += ', ' + stripped
+
+        print(f"[Tools] Generated prompt from description ({len(positive)} chars)")
+        return jsonify({
+            'success': True,
+            'prompt': positive,
+            'negative': negative
+        })
+
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'GLM API timed out'}), 504
+    except Exception as e:
+        print(f"[Tools] Char-to-prompt error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('FLASK_PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'

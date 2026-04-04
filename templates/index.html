@@ -59,6 +59,7 @@
                 <button class="tool-tab active" data-tool="tagger" onclick="switchTool('tagger')"><i class="fas fa-tags"></i> Image → Tags</button>
                 <button class="tool-tab" data-tool="metadata" onclick="switchTool('metadata')"><i class="fas fa-file-alt"></i> Metadata</button>
                 <button class="tool-tab" data-tool="weights" onclick="switchTool('weights')"><i class="fas fa-balance-scale"></i> Weights</button>
+                <button class="tool-tab" data-tool="chargen" onclick="switchTool('chargen')"><i class="fas fa-user-edit"></i> Char→Prompt</button>
             </div>
             <div class="tools-body">
 
@@ -133,6 +134,44 @@
                             <button class="btn btn-sm" onclick="copyWeightOutput()"><i class="fas fa-copy"></i> Copy</button>
                             <button class="btn btn-sm" onclick="sendWeightToPrompt()" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Tool 4: Character → Prompt -->
+                <div id="tool_chargen" class="tool-panel" style="display:none">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Describe a character in natural language and AI will generate an optimized Stable Diffusion prompt with Danbooru-style tags.</p>
+                    <textarea id="chargenInput" placeholder="Ex: A tall girl with long silver hair and red eyes, wearing a black military coat, standing in the rain at night with a katana" rows="4"></textarea>
+                    <div style="display:flex;gap:.5rem;align-items:center;margin:.5rem 0">
+                        <label style="font-size:.7rem;color:var(--muted);white-space:nowrap">Style</label>
+                        <select id="chargenStyle" style="flex:1">
+                            <option value="anime">🎌 Anime / Danbooru</option>
+                            <option value="realistic">📷 Realistic / Photo</option>
+                            <option value="fantasy">⚔️ Fantasy / Illustration</option>
+                        </select>
+                    </div>
+                    <button class="btn-accent" onclick="runCharGen()" id="chargenBtn" style="margin:.5rem 0">
+                        <i class="fas fa-magic"></i> Generate Prompt
+                    </button>
+                    <div id="chargenResult" style="display:none">
+                        <div style="margin-top:.75rem">
+                            <label style="font-size:.7rem;color:var(--accent2);font-family:Graduate,serif;display:block;margin-bottom:.25rem">Positive Prompt</label>
+                            <textarea id="chargenPositive" rows="4" readonly></textarea>
+                            <div style="display:flex;gap:.3rem;margin-top:.3rem">
+                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('chargenPositive').value);showToast('Copied!','success')"><i class="fas fa-copy"></i> Copy</button>
+                                <button class="btn btn-sm" onclick="document.getElementById('promptInput').value=document.getElementById('chargenPositive').value;closeTools();showToast('Prompt set!','success')" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
+                            </div>
+                        </div>
+                        <div style="margin-top:.75rem">
+                            <label style="font-size:.7rem;color:var(--accent2);font-family:Graduate,serif;display:block;margin-bottom:.25rem">Negative Prompt</label>
+                            <textarea id="chargenNegative" rows="2" readonly></textarea>
+                            <div style="display:flex;gap:.3rem;margin-top:.3rem">
+                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('chargenNegative').value);showToast('Copied!','success')"><i class="fas fa-copy"></i> Copy</button>
+                                <button class="btn btn-sm" onclick="document.getElementById('negativePrompt').value=document.getElementById('chargenNegative').value;showToast('Negative set!','success')" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Negative</button>
+                            </div>
+                        </div>
+                        <button class="btn-accent" onclick="applyCharGenBoth()" style="margin-top:.75rem;width:100%">
+                            <i class="fas fa-check-double"></i> Apply Both & Close
+                        </button>
                     </div>
                 </div>
 
@@ -2063,6 +2102,34 @@
         function sendWeightToPrompt() {
             document.getElementById('promptInput').value = document.getElementById('weightOutputText').value;
             closeTools(); showToast('Prompt updated!', 'success');
+        }
+
+        // --- Tool 4: Character → Prompt ---
+        async function runCharGen() {
+            const desc = document.getElementById('chargenInput').value.trim();
+            if (!desc) { showToast('Enter a character description'); return; }
+            const btn = document.getElementById('chargenBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            try {
+                const style = document.getElementById('chargenStyle').value;
+                const resp = await fetch('/api/tools/char-to-prompt', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ description: desc, style })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                document.getElementById('chargenPositive').value = data.prompt || '';
+                document.getElementById('chargenNegative').value = data.negative || '';
+                document.getElementById('chargenResult').style.display = 'block';
+                showToast('Prompt generated!', 'success');
+            } catch (e) { showToast('Error: ' + e.message); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Generate Prompt'; }
+        }
+        function applyCharGenBoth() {
+            document.getElementById('promptInput').value = document.getElementById('chargenPositive').value;
+            document.getElementById('negativePrompt').value = document.getElementById('chargenNegative').value;
+            closeTools();
+            showToast('Prompt & Negative applied!', 'success');
         }
 
         // Init tools drop zones
