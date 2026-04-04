@@ -1750,6 +1750,8 @@
             if (!item || !item.info) { showToast('No parameters to recycle'); return; }
             const info = item.info;
 
+            console.log('[Recycle] info dump:', JSON.stringify(info));
+
             // Restore prompt & negative
             if (info._prompt !== undefined) document.getElementById('promptInput').value = info._prompt;
             if (info._negative !== undefined) document.getElementById('negativePrompt').value = info._negative;
@@ -1806,15 +1808,16 @@
                 val.toLowerCase().includes(o.value.toLowerCase())
             );
             if (match) sel.value = match.value;
+            else console.warn(`[Recycle] No option found for #${id} = "${val}"`);
         }
 
-        // Set range slider + linked number input
+        // Set range slider + linked number input + trigger events for sync
         function uiSetSlider(sliderId, inputId, val) {
             if (val === undefined || val === null || val === '') return;
             const s = document.getElementById(sliderId);
             const inp = document.getElementById(inputId);
-            if (s) s.value = val;
-            if (inp) inp.value = val;
+            if (s) { s.value = val; s.dispatchEvent(new Event('input')); }
+            if (inp) { inp.value = val; }
         }
 
         // ========== UTILITIES ==========
