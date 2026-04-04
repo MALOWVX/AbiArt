@@ -841,14 +841,8 @@ def tool_char_to_prompt():
     if not description:
         return jsonify({'error': 'No description provided'}), 400
 
-    glm_url = os.environ.get('GLM_API_URL', '')
+    api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-9eb6.up.railway.app/V1/chat/completions')
     glm_key = os.environ.get('GLM_API_KEY', '')
-
-    if not glm_url:
-        return jsonify({'error': 'GLM API not configured (set GLM_API_URL)'}), 500
-
-    # Build the endpoint
-    api_endpoint = glm_url.rstrip('/') + '/v1/chat/completions'
 
     style_hints = {
         'anime': 'Use Danbooru/booru-style tags. Include anime-specific quality tags like masterpiece, best quality, highres.',
