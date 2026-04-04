@@ -3,7 +3,11 @@ import json
 import base64
 import random
 import sqlite3
+import logging
+import traceback
 import requests
+from collections import deque
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -13,6 +17,27 @@ load_dotenv()
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.environ.get('SECRET_KEY', 'abiart-secret-key-2024-change-me')
+
+# Session permanence — keeps user logged in for 30 days if they don't explicitly log out
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+
+# =============================
+# IN-MEMORY LOG BUFFER
+# =============================
+_log_buffer = deque(maxlen=200)  # Keep last 200 log entries
+
+def log(level, message, extra=None):
+    """Add entry to in-memory log buffer and print to stdout"""
+    entry = {
+        'time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+        'level': level,
+        'message': message,
+    }
+    if extra:
+        entry['extra'] = str(extra)[:500]
+    _log_buffer.append(entry)
+    prefix = {'INFO': '[INFO]', 'WARN': '[WARN]', 'ERROR': '[ERROR]'}.get(level, '[LOG]')
+    print(f"{prefix} {entry['time']} {message}" + (f" | {extra}" if extra else ''))
 
 # ===============================
 # DATABASE & AUTH
@@ -208,6 +233,8 @@ def register():
 
     session['user_id'] = user['id']
     session['username'] = user['username']
+    session.permanent = True  # Persist session for 30 days
+    log('INFO', f"New registration: '{username}'")
 
     return jsonify({
         'success': True,
@@ -234,6 +261,8 @@ def login():
 
     session['user_id'] = user['id']
     session['username'] = user['username']
+    session.permanent = True  # Persist session for 30 days
+    log('INFO', f"Login: '{username}' from {request.remote_addr}")
 
     return jsonify({
         'success': True,
@@ -620,6 +649,7 @@ def generate_modal():
         if enable_hr: timeout = 600
         response = requests.post(MODAL_GENERATE_URL, json=payload, timeout=timeout)
         print(f"[Modal] Response status: {response.status_code}")
+        log('INFO', f"Modal generate: status={response.status_code}, user={session.get('username','?')}")
 
         if response.status_code == 200:
             result = response.json()
@@ -643,15 +673,19 @@ def generate_modal():
                     }
                 return jsonify(resp)
             else:
+                log('WARN', 'Modal response missing image field', response.text[:200])
                 return jsonify({'error': 'No image in response'}), 500
         else:
             error_text = response.text[:500] if response.text else 'Unknown error'
+            log('ERROR', f"Modal HTTP {response.status_code}", error_text)
             return jsonify({'error': f'Modal error: {error_text}'}), 500
 
     except requests.exceptions.Timeout:
-        return jsonify({'error': 'Generation timed out - Modal may be cold starting, try again'}), 504
+        log('ERROR', 'Modal generation timed out', f"user={session.get('username','?')}")
+        return jsonify({'error': 'Generation timed out - Modal may be cold starting, try again in ~30s'}), 504
     except Exception as e:
-        print(f"[Modal] Exception: {str(e)}")
+        tb = traceback.format_exc()
+        log('ERROR', f'Modal generate exception: {str(e)}', tb[:300])
         return jsonify({'error': str(e)}), 500
 
 
@@ -913,6 +947,94 @@ Rules:
     except Exception as e:
         print(f"[Tools] Char-to-prompt error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+
+# ===============================
+# ADMIN LOGS
+# ===============================
+
+@app.route('/admin/logs')
+def admin_logs_view():
+    """Admin-only HTML page showing recent log entries"""
+    user = get_current_user()
+    if not user or not user['is_admin']:
+        return '<h1>403 Forbidden</h1>', 403
+
+    logs = list(reversed(_log_buffer))
+    level_colors = {'INFO': '#4ade80', 'WARN': '#facc15', 'ERROR': '#f87171'}
+
+    rows = ''
+    for e in logs:
+        color = level_colors.get(e['level'], '#aaa')
+        extra_html = f'<div style="font-size:.7rem;opacity:.6;margin-top:.2rem">{e.get("extra","")}</div>' if e.get('extra') else ''
+        rows += f'''<tr>
+            <td style="color:#888;white-space:nowrap;padding:.3rem .6rem">{e["time"]}</td>
+            <td style="color:{color};font-weight:700;padding:.3rem .6rem">{e["level"]}</td>
+            <td style="padding:.3rem .6rem">{e["message"]}{extra_html}</td>
+        </tr>'''
+
+    html = f'''<!DOCTYPE html>
+<html>
+<head>
+<title>AbiArt Logs</title>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="15">
+<style>
+  body {{ background:#0a0a0f; color:#e0e0e0; font-family:monospace; margin:0; padding:1rem; }}
+  h1 {{ color:#8b5cf6; font-size:1.2rem; margin-bottom:.5rem; }}
+  p {{ color:#666; font-size:.75rem; margin-bottom:1rem; }}
+  table {{ width:100%; border-collapse:collapse; font-size:.78rem; }}
+  tr:nth-child(even) {{ background:rgba(255,255,255,.03); }}
+  tr:hover {{ background:rgba(139,92,246,.08); }}
+  a {{ color:#8b5cf6; text-decoration:none; }}
+  .badge {{ background:#1a1a2e; border:1px solid #333; padding:.15rem .4rem; border-radius:3px; font-size:.65rem; }}
+</style>
+</head>
+<body>
+<h1>🔍 AbiArt — Server Logs</h1>
+<p>Last {len(logs)} entries (max 200) · Auto-refreshes every 15s · <a href="/admin/logs/json">JSON</a></p>
+<table>
+<thead><tr>
+  <th style="text-align:left;color:#555;padding:.3rem .6rem">Time (UTC)</th>
+  <th style="text-align:left;color:#555;padding:.3rem .6rem">Level</th>
+  <th style="text-align:left;color:#555;padding:.3rem .6rem">Message</th>
+</tr></thead>
+<tbody>{rows if rows else '<tr><td colspan="3" style="color:#555;padding:1rem">No logs yet</td></tr>'}</tbody>
+</table>
+</body>
+</html>'''
+    return html
+
+
+@app.route('/admin/logs/json')
+def admin_logs_json():
+    """Admin-only JSON endpoint returning raw log buffer"""
+    user = get_current_user()
+    if not user or not user['is_admin']:
+        return jsonify({'error': 'Forbidden'}), 403
+    return jsonify({'logs': list(reversed(_log_buffer)), 'count': len(_log_buffer)})
+
+
+# ===============================
+# GLOBAL ERROR HANDLERS
+# ===============================
+
+@app.errorhandler(401)
+def handle_401(e):
+    log('WARN', f'401 Unauthorized: {request.path}', request.remote_addr)
+    return jsonify({'error': 'Authentication required'}), 401
+
+
+@app.errorhandler(404)
+def handle_404(e):
+    return jsonify({'error': 'Not found'}), 404
+
+
+@app.errorhandler(500)
+def handle_500(e):
+    log('ERROR', f'500 Internal server error: {request.path}', str(e))
+    return jsonify({'error': 'Internal server error'}), 500
 
 
 if __name__ == '__main__':
