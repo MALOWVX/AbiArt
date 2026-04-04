@@ -1101,6 +1101,11 @@
                 const vaeSelect = document.getElementById('modalVae');
                 if (data.vaes && vaeSelect) vaeSelect.innerHTML = data.vaes.map(v => `<option value="${v}">${v}</option>`).join('');
                 updateActiveLorasDisplay();
+                // Apply pending recycle model if one is waiting
+                if (window._pendingRecycleModel) {
+                    setSelect('modalModel', window._pendingRecycleModel);
+                    window._pendingRecycleModel = null;
+                }
             } catch (e) {
                 select.innerHTML = '<option value="default">SDXL Base 1.0</option>';
                 loraListDiv.innerHTML = '<p style="color:var(--error);font-size:.7rem">Could not load (Modal offline?)</p>';
@@ -1643,8 +1648,9 @@
         }
 
         async function addToHistory(imageBase64, info) {
-            const thumb = await createThumbnail(imageBase64);
-            imageHistoryData.unshift({ image: imageBase64, thumb, info, timestamp: Date.now() });
+            const thumb = await createThumbnail(imageBase64);         // tiny 100px for strip
+            const medium = await createThumbnail(imageBase64, 900);   // 900px JPEG for saved view
+            imageHistoryData.unshift({ image: imageBase64, medium, thumb, info, timestamp: Date.now() });
             if (imageHistoryData.length > MAX_HISTORY) imageHistoryData.pop();
             renderHistoryStrip();
             saveHistoryToStorage();
@@ -1666,17 +1672,16 @@
 
         function saveHistoryToStorage() {
             try {
-                // Compress and save full images + info with timestamp
+                // Save medium-quality JPEG (not raw PNG) to stay within localStorage limits
                 const compact = imageHistoryData.map(item => ({
-                    image: item.image || item.thumb,  // full base64 or thumb
+                    image: item.medium || item.thumb,   // 900px JPEG compressed, never raw PNG
                     thumb: item.thumb,
                     info: item.info,
                     timestamp: item.timestamp || Date.now()
                 }));
                 localStorage.setItem(HISTORY_KEY, JSON.stringify(compact));
             } catch (e) {
-                console.warn('Could not save history (storage full), trimming...', e);
-                // Trim oldest entries until it fits
+                console.warn('Could not save history (storage full), trimming oldest...', e);
                 if (imageHistoryData.length > 1) {
                     imageHistoryData = imageHistoryData.slice(0, imageHistoryData.length - 1);
                     saveHistoryToStorage();
@@ -1688,11 +1693,11 @@
             try {
                 const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
                 const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000);
-                // Filter out entries older than 15 days
                 imageHistoryData = saved
                     .filter(item => !item.timestamp || item.timestamp > fifteenDaysAgo)
                     .map(item => ({
-                        image: item.image || item.thumb,
+                        image: item.image || item.thumb,   // medium-quality JPEG (or thumb for old entries)
+                        medium: item.image || item.thumb,  // same reference
                         thumb: item.thumb || item.image,
                         info: item.info || {},
                         timestamp: item.timestamp || Date.now()
@@ -1783,7 +1788,18 @@
                 setSlider('modalClipSkip', 'modalClipSkipVal', info.clip_skip);
                 if (info.vae) setSelect('modalVae', info.vae);
                 const modelVal = info._model || info.model;
-                if (modelVal) setSelect('modalModel', modelVal);
+                if (modelVal) {
+                    // Try to set model immediately; if select still loading, queue it
+                    const sel = document.getElementById('modalModel');
+                    const opts = Array.from(sel.options);
+                    const isLoading = opts.length === 1 && opts[0].value === 'default' && opts[0].text === 'Loading...';
+                    if (isLoading || opts.length === 0) {
+                        window._pendingRecycleModel = modelVal;
+                        showToast('Model will be applied once list loads...', 'success');
+                    } else {
+                        setSelect('modalModel', modelVal);
+                    }
+                }
                 if (info._loras) {
                     activeModalLoras = JSON.parse(JSON.stringify(info._loras));
                     updateActiveLorasDisplay();
