@@ -35,7 +35,17 @@
                 </div>
                 <div class="auth-field">
                     <label>Password</label>
-                    <input type="password" id="authPassword" placeholder="Enter your password" autocomplete="current-password" required minlength="4">
+                    <div class="pw-wrap">
+                        <input type="password" id="authPassword" placeholder="Enter your password" autocomplete="current-password" required minlength="4">
+                        <button type="button" class="pw-eye" onclick="togglePw('authPassword',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+                    </div>
+                </div>
+                <div class="auth-field" id="confirmField" style="display:none">
+                    <label>Confirm Password</label>
+                    <div class="pw-wrap">
+                        <input type="password" id="authPasswordConfirm" placeholder="Repeat your password" minlength="4">
+                        <button type="button" class="pw-eye" onclick="togglePw('authPasswordConfirm',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+                    </div>
                 </div>
                 <button type="submit" class="auth-submit" id="authSubmitBtn">
                     <i class="fas fa-sign-in-alt"></i> Login
@@ -47,6 +57,73 @@
     </div>
 
     <!-- Tools Panel Overlay -->
+    <!-- Tutorial Overlay -->
+    <div id="tutorialOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:20000;pointer-events:none">
+        <div class="tut-box" id="tutBox">
+            <div class="tut-header">
+                <span class="tut-step-label" id="tutStepLabel">Step 1 / 5</span>
+                <button class="tools-close" onclick="skipTutorial()" style="pointer-events:all"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="tut-body" id="tutBody"></div>
+            <div class="tut-footer">
+                <button class="btn btn-sm" onclick="skipTutorial()" style="pointer-events:all">Skip</button>
+                <button class="btn-accent" onclick="nextTutStep()" id="tutNextBtn" style="pointer-events:all"><i class="fas fa-arrow-right"></i> Next</button>
+            </div>
+        </div>
+        <div class="tut-backdrop" id="tutBackdrop"></div>
+    </div>
+
+    <!-- Community Overlay -->
+    <div id="communityPanel" class="tools-overlay" style="display:none">
+        <div class="tools-container" style="max-width:820px">
+            <div class="tools-header">
+                <div style="display:flex;align-items:center;gap:.5rem">
+                    <i class="fas fa-users" style="color:var(--accent2)"></i>
+                    <h2 style="font-family:Graduate,serif;font-size:1.2rem;margin:0">Community Presets</h2>
+                </div>
+                <div style="display:flex;gap:.5rem;align-items:center">
+                    <select id="comSort" onchange="loadCommunity()" style="font-size:.7rem;padding:.2rem .4rem">
+                        <option value="recent">🕐 Recent</option>
+                        <option value="popular">🔥 Popular</option>
+                    </select>
+                    <button class="btn btn-sm" onclick="openShareModal()" style="border-color:var(--accent2);color:var(--accent2)"><i class="fas fa-share-alt"></i> Share my Preset</button>
+                    <button class="tools-close" onclick="closeCommunity()"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="tools-body" id="communityGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;padding:1rem">
+                <div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:2rem">
+                    <i class="fas fa-spinner fa-spin" style="font-size:1.5rem"></i>
+                    <p style="margin:.5rem 0 0;font-size:.8rem">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Preset Modal -->
+    <div id="shareModal" class="tools-overlay" style="display:none">
+        <div class="tools-container" style="max-width:420px">
+            <div class="tools-header">
+                <h2 style="font-family:Graduate,serif;font-size:1rem;margin:0"><i class="fas fa-share-alt" style="color:var(--accent2)"></i> Share Preset</h2>
+                <button class="tools-close" onclick="closeShareModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding:1rem">
+                <p class="tool-desc"><i class="fas fa-info-circle"></i> Share your current settings + the generated image with the community.</p>
+                <div class="auth-field" style="margin-bottom:.75rem">
+                    <label style="font-family:Graduate,serif;font-size:.7rem;color:var(--accent2)">Title</label>
+                    <input type="text" id="shareTitle" placeholder="e.g: Cinematic Portrait SDXL" maxlength="100" style="width:100%">
+                </div>
+                <div id="shareThumbPreview" style="text-align:center;margin:.5rem 0">
+                    <img id="shareThumbImg" style="max-height:120px;border:1px solid var(--dim)" src="" onerror="this.style.display='none'">
+                    <p id="shareThumbMsg" style="font-size:.7rem;color:var(--muted)"></p>
+                </div>
+                <p id="shareError" style="color:var(--error);font-size:.7rem"></p>
+                <button class="btn-accent" onclick="submitShare()" id="shareSubmitBtn" style="width:100%">
+                    <i class="fas fa-share-alt"></i> Share
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="toolsPanel" class="tools-overlay" style="display:none">
         <div class="tools-container">
             <div class="tools-header">
@@ -195,6 +272,7 @@
                 <button class="backend-btn" data-backend="modal" onclick="setBackend('modal')"><i
                         class="fas fa-bolt"></i> Modal</button>
             </div>
+            <button class="tools-btn" onclick="openCommunity()" title="Community" style="border-color:var(--accent2);color:var(--accent2)" id="communityHeaderBtn"><i class="fas fa-users"></i> Community</button>
             <button class="tools-btn" onclick="openTools()" title="Tools"><i class="fas fa-wrench"></i> Tools</button>
             <div class="user-badge" id="userBadge" style="display:none">
                 <span class="credits-display" id="creditsDisplay" title="Images remaining"><i class="fas fa-image"></i> <span id="creditsCount">3</span></span>
@@ -617,6 +695,7 @@
                 <button class="btn-accent" id="generateBtn" onclick="generateImage()">
                     <i class="fas fa-sparkles"></i> Generate Image
                 </button>
+                <div class="made-by">Made by <span>.nasdas</span></div>
             </div>
         </aside>
 
@@ -659,6 +738,13 @@
         let authMode = 'login';
 
         // ========== AUTH ==========
+        function togglePw(fieldId, btn) {
+            const inp = document.getElementById(fieldId);
+            const isHidden = inp.type === 'password';
+            inp.type = isHidden ? 'text' : 'password';
+            btn.querySelector('i').className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
+        }
+
         function switchAuthTab(mode) {
             authMode = mode;
             document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
@@ -666,6 +752,8 @@
             const btn = document.getElementById('authSubmitBtn');
             btn.innerHTML = mode === 'login' ? '<i class="fas fa-sign-in-alt"></i> Login' : '<i class="fas fa-user-plus"></i> Create Account';
             document.getElementById('authError').textContent = '';
+            document.getElementById('confirmField').style.display = mode === 'register' ? 'block' : 'none';
+            document.getElementById('authPasswordConfirm').required = (mode === 'register');
         }
 
         async function handleAuth(e) {
@@ -675,6 +763,16 @@
             const errorEl = document.getElementById('authError');
             const btn = document.getElementById('authSubmitBtn');
             errorEl.textContent = '';
+
+            // Confirm password check on register
+            if (authMode === 'register') {
+                const confirm = document.getElementById('authPasswordConfirm').value;
+                if (password !== confirm) {
+                    errorEl.textContent = 'Passwords do not match.';
+                    return;
+                }
+            }
+
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
 
@@ -688,7 +786,9 @@
                 const data = await resp.json();
                 if (data.success && data.user) {
                     currentUser = data.user;
+                    const isNewUser = authMode === 'register';
                     showApp();
+                    if (isNewUser) startTutorial();
                 } else {
                     errorEl.textContent = data.error || 'Authentication failed';
                 }
@@ -1566,18 +1666,19 @@
 
         function saveHistoryToStorage() {
             try {
-                // Save only thumbnails + info (not full images) to fit in localStorage
+                // Compress and save full images + info with timestamp
                 const compact = imageHistoryData.map(item => ({
+                    image: item.image || item.thumb,  // full base64 or thumb
                     thumb: item.thumb,
                     info: item.info,
-                    timestamp: item.timestamp
+                    timestamp: item.timestamp || Date.now()
                 }));
                 localStorage.setItem(HISTORY_KEY, JSON.stringify(compact));
             } catch (e) {
-                console.warn('Could not save history (storage full?)', e);
-                // Try reducing size
-                if (imageHistoryData.length > 10) {
-                    imageHistoryData = imageHistoryData.slice(0, 10);
+                console.warn('Could not save history (storage full), trimming...', e);
+                // Trim oldest entries until it fits
+                if (imageHistoryData.length > 1) {
+                    imageHistoryData = imageHistoryData.slice(0, imageHistoryData.length - 1);
                     saveHistoryToStorage();
                 }
             }
@@ -1586,12 +1687,16 @@
         function loadHistoryFromStorage() {
             try {
                 const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-                imageHistoryData = saved.map(item => ({
-                    image: item.image || item.thumb, // full image if available, else thumb
-                    thumb: item.thumb,
-                    info: item.info || {},
-                    timestamp: item.timestamp
-                }));
+                const fifteenDaysAgo = Date.now() - (15 * 24 * 60 * 60 * 1000);
+                // Filter out entries older than 15 days
+                imageHistoryData = saved
+                    .filter(item => !item.timestamp || item.timestamp > fifteenDaysAgo)
+                    .map(item => ({
+                        image: item.image || item.thumb,
+                        thumb: item.thumb || item.image,
+                        info: item.info || {},
+                        timestamp: item.timestamp || Date.now()
+                    }));
                 renderHistoryStrip();
             } catch (e) { console.warn('Could not load history:', e); }
         }
@@ -1608,7 +1713,11 @@
             const item = imageHistoryData[index];
             if (!item) return;
             currentImage = item.image;
-            const imgSrc = item.image.length > 1000 ? `data:image/png;base64,${item.image}` : `data:image/jpeg;base64,${item.thumb}`;
+            // Use full image if available (long base64), else thumb
+            const hasFullImg = item.image && item.image.length > 500;
+            const imgSrc = hasFullImg
+                ? `data:image/png;base64,${item.image}`
+                : (item.thumb ? `data:image/jpeg;base64,${item.thumb}` : '');
             document.getElementById('outputArea').innerHTML = `<img src="${imgSrc}" class="generated-image" id="genImage">
             <div class="image-actions">
                 <button class="action-btn" onclick="recycleParams(${index})" title="Recycle settings"><i class="fas fa-recycle"></i></button>
@@ -1635,54 +1744,66 @@
             const item = imageHistoryData[historyIndex];
             if (!item || !item.info) { showToast('No parameters to recycle'); return; }
             const info = item.info;
-            
-            // Switch backend if needed first, so the right backend is active
+
+            // Switch backend first
             if (info._backend) setBackend(info._backend);
 
             // Restore prompt & negative
-            if (info._prompt) document.getElementById('promptInput').value = info._prompt;
+            if (info._prompt !== undefined) document.getElementById('promptInput').value = info._prompt;
             if (info._negative !== undefined) document.getElementById('negativePrompt').value = info._negative;
-            
-            // Restore backend specific settings
+
+            // Helper: set a select value with fuzzy fallback
+            function setSelect(id, val) {
+                if (!val) return;
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                // Try exact match first
+                const opts = Array.from(sel.options);
+                let match = opts.find(o => o.value === val || o.text === val);
+                if (!match) match = opts.find(o => o.value.toLowerCase().includes(val.toLowerCase()) || val.toLowerCase().includes(o.value.toLowerCase()));
+                if (match) sel.value = match.value;
+            }
+
+            // Helper: set slider + number input
+            function setSlider(sliderId, inputId, val) {
+                if (!val) return;
+                const s = document.getElementById(sliderId);
+                const i = document.getElementById(inputId);
+                if (s) s.value = val;
+                if (i) i.value = val;
+            }
+
             if (currentBackend === 'modal') {
                 if (info.seed !== undefined) document.getElementById('modalSeed').value = info.seed;
-                if (info.steps) { document.getElementById('modalSteps').value = info.steps; document.getElementById('modalStepsVal').value = info.steps; }
-                if (info.cfg_scale) { document.getElementById('modalCfgScale').value = info.cfg_scale; document.getElementById('modalCfgVal').value = info.cfg_scale; }
+                setSlider('modalSteps', 'modalStepsVal', info.steps);
+                setSlider('modalCfgScale', 'modalCfgVal', info.cfg_scale);
                 if (info.width) document.getElementById('modalWidth').value = info.width;
                 if (info.height) document.getElementById('modalHeight').value = info.height;
-                if (info.scheduler) document.getElementById('modalScheduler').value = info.scheduler;
-                if (info.clip_skip) { document.getElementById('modalClipSkip').value = info.clip_skip; document.getElementById('modalClipSkipVal').value = info.clip_skip; }
-                if (info.vae) document.getElementById('modalVae').value = info.vae;
-                if (info.model || info._model) document.getElementById('modalModel').value = info.model || info._model;
-                // Restore LoRAs
+                setSelect('modalScheduler', info.scheduler);
+                setSlider('modalClipSkip', 'modalClipSkipVal', info.clip_skip);
+                if (info.vae) setSelect('modalVae', info.vae);
+                const modelVal = info._model || info.model;
+                if (modelVal) setSelect('modalModel', modelVal);
                 if (info._loras) {
                     activeModalLoras = JSON.parse(JSON.stringify(info._loras));
                     updateActiveLorasDisplay();
                 }
             } else if (currentBackend === 'kaggle') {
-                if (info.steps) { document.getElementById('steps').value = info.steps; document.getElementById('stepsVal').value = info.steps; }
-                if (info.cfg_scale) { document.getElementById('cfgScale').value = info.cfg_scale; document.getElementById('cfgVal').value = info.cfg_scale; }
+                setSlider('steps', 'stepsVal', info.steps);
+                setSlider('cfgScale', 'cfgVal', info.cfg_scale);
                 if (info.width && info.height) {
                     const sizeStr = `${info.width}x${info.height}`;
-                    const sizeSelect = document.getElementById('imgSize');
-                    if (Array.from(sizeSelect.options).some(opt => opt.value === sizeStr)) {
-                        sizeSelect.value = sizeStr;
-                    }
+                    setSelect('imgSize', sizeStr);
                 }
-                if (info.model || info._model) document.getElementById('kaggleModel').value = info.model || info._model;
+                setSelect('kaggleModel', info._model || info.model);
                 if (info._loras) {
                     activeLoRAs = JSON.parse(JSON.stringify(info._loras));
                     updateLorasDisplay();
                 }
             } else if (currentBackend === 'huggingface') {
-                if (info.guidance_scale || info.cfg_scale) { 
-                    const g = info.guidance_scale || info.cfg_scale;
-                    document.getElementById('hfGuidance').value = g; 
-                    document.getElementById('hfGuidanceVal').value = g; 
-                }
-                if (info.model || info._model) {
-                    document.getElementById('hfModel').value = info.model || info._model;
-                }
+                const g = info.guidance_scale || info.cfg_scale;
+                setSlider('hfGuidance', 'hfGuidanceVal', g);
+                setSelect('hfModel', info._model || info.model);
             }
 
             if (typeof autoSaveSettings === 'function') autoSaveSettings();
@@ -2131,6 +2252,232 @@
             document.getElementById('negativePrompt').value = document.getElementById('chargenNegative').value;
             closeTools();
             showToast('Prompt & Negative applied!', 'success');
+        }
+
+        // ========== TUTORIAL ==========
+        const TUT_STEPS = [
+            { title: '👋 Welcome to AbiArt!', body: 'This is your AI image studio. Let me show you how to use it in 5 quick steps.', target: null },
+            { title: '🖥️ Choose your Backend', body: 'Use the <strong>Modal</strong> button in the top bar. Modal gives you the best quality using a real GPU on the cloud.', target: '.backend-selector' },
+            { title: '✍️ Write your Prompt', body: 'Describe what you want to generate in the <strong>Prompt</strong> box. More detail = better results! You can also use the <strong>Tools → Char→Prompt</strong> if you need help.', target: '#promptInput' },
+            { title: '⚙️ Adjust Settings', body: 'In the left panel, you can choose your <strong>Model</strong>, set the <strong>Steps</strong>, <strong>CFG</strong>, <strong>Size</strong> and more. Keep defaults to start!', target: '#modalSettings' },
+            { title: '🚀 Generate!', body: 'Click the big <strong>Generate Image</strong> button. Your image will appear in the center. You can view past generations in the history strip below.', target: '#generateBtn' }
+        ];
+        let _tutStep = 0;
+
+        function startTutorial() {
+            if (localStorage.getItem('abiart_tutorial_done')) return;
+            _tutStep = 0;
+            document.getElementById('tutorialOverlay').style.display = 'block';
+            renderTutStep();
+        }
+
+        function renderTutStep() {
+            const step = TUT_STEPS[_tutStep];
+            document.getElementById('tutStepLabel').textContent = `Step ${_tutStep + 1} / ${TUT_STEPS.length}`;
+            document.getElementById('tutBody').innerHTML = `<h3 style="font-family:Graduate,serif;font-size:1rem;margin:0 0 .5rem">${step.title}</h3><p style="font-size:.8rem;color:var(--muted);line-height:1.5;margin:0">${step.body}</p>`;
+            const isLast = _tutStep === TUT_STEPS.length - 1;
+            const btn = document.getElementById('tutNextBtn');
+            btn.innerHTML = isLast ? '<i class="fas fa-check"></i> Done' : '<i class="fas fa-arrow-right"></i> Next';
+            // Position box near target if possible
+            positionTutBox(step.target);
+        }
+
+        function positionTutBox(selector) {
+            const box = document.getElementById('tutBox');
+            box.style.pointerEvents = 'all';
+            if (!selector) {
+                box.style.top = '50%'; box.style.left = '50%';
+                box.style.transform = 'translate(-50%,-50%)';
+                return;
+            }
+            const el = document.querySelector(selector);
+            if (!el) { box.style.top = '50%'; box.style.left = '50%'; box.style.transform = 'translate(-50%,-50%)'; return; }
+            const r = el.getBoundingClientRect();
+            const bw = 300, bh = 160;
+            let top = r.bottom + 12, left = r.left;
+            if (top + bh > window.innerHeight) top = r.top - bh - 12;
+            if (left + bw > window.innerWidth) left = window.innerWidth - bw - 16;
+            if (left < 8) left = 8;
+            box.style.transform = '';
+            box.style.top = top + 'px';
+            box.style.left = left + 'px';
+        }
+
+        function nextTutStep() {
+            if (_tutStep >= TUT_STEPS.length - 1) { skipTutorial(); return; }
+            _tutStep++; renderTutStep();
+        }
+
+        function skipTutorial() {
+            localStorage.setItem('abiart_tutorial_done', '1');
+            document.getElementById('tutorialOverlay').style.display = 'none';
+        }
+
+        // ========== COMMUNITY ==========
+        let _communityPresets = [];
+
+        function openCommunity() {
+            document.getElementById('communityPanel').style.display = 'flex';
+            loadCommunity();
+        }
+
+        function closeCommunity() {
+            document.getElementById('communityPanel').style.display = 'none';
+        }
+
+        async function loadCommunity() {
+            const sort = document.getElementById('comSort').value;
+            const grid = document.getElementById('communityGrid');
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:2rem"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem"></i></div>';
+            try {
+                const resp = await fetch(`/api/community/presets?sort=${sort}`);
+                const data = await resp.json();
+                _communityPresets = data.presets || [];
+                renderCommunityGrid();
+            } catch (e) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--error);padding:2rem">Failed to load presets</div>';
+            }
+        }
+
+        function renderCommunityGrid() {
+            const grid = document.getElementById('communityGrid');
+            if (_communityPresets.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:3rem"><i class="fas fa-seedling" style="font-size:2rem;display:block;margin-bottom:.5rem"></i>No presets yet. Be the first to share!</div>';
+                return;
+            }
+            const isAdmin = currentUser && currentUser.is_admin;
+            grid.innerHTML = _communityPresets.map((p, i) => {
+                const canDelete = isAdmin || (currentUser && currentUser.username === p.username);
+                return `<div class="com-card">
+                    <div class="com-img-wrap">
+                        <img src="data:image/jpeg;base64,${p.image_thumb}" class="com-img" onerror="this.src=''">
+                    </div>
+                    <div class="com-info">
+                        <div class="com-title">${p.title}</div>
+                        <div class="com-meta">by <strong>${p.username}</strong></div>
+                    </div>
+                    <div class="com-actions">
+                        <button class="btn btn-sm" onclick="likePreset(${p.id}, this)" title="Like">
+                            <i class="fas fa-heart" style="color:#f472b6"></i> ${p.likes}
+                        </button>
+                        <button class="btn btn-sm" onclick="loadCommunityPreset(${p.id})" style="border-color:var(--accent);color:var(--accent)">
+                            <i class="fas fa-download"></i> Load
+                        </button>
+                        ${canDelete ? `<button class="btn btn-sm btn-danger" onclick="deleteCommunityPreset(${p.id}, this)" title="Delete"><i class="fas fa-trash"></i></button>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function likePreset(id, btn) {
+            const resp = await fetch(`/api/community/like/${id}`, { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) btn.innerHTML = `<i class="fas fa-heart" style="color:#f472b6"></i> ${data.likes}`;
+        }
+
+        async function loadCommunityPreset(id) {
+            try {
+                const resp = await fetch(`/api/community/presets/${id}`);
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                const p = JSON.parse(data.preset_json);
+                if (p.prompt) document.getElementById('promptInput').value = p.prompt;
+                if (p.negative) document.getElementById('negativePrompt').value = p.negative;
+                if (p.backend) setBackend(p.backend);
+                if (p.steps) { document.getElementById('modalSteps').value = p.steps; document.getElementById('modalStepsVal').value = p.steps; }
+                if (p.cfg_scale) { document.getElementById('modalCfgScale').value = p.cfg_scale; document.getElementById('modalCfgVal').value = p.cfg_scale; }
+                if (p.width) document.getElementById('modalWidth').value = p.width;
+                if (p.height) document.getElementById('modalHeight').value = p.height;
+                if (p.scheduler) document.getElementById('modalScheduler').value = p.scheduler;
+                if (p.model) document.getElementById('modalModel').value = p.model;
+                closeCommunity();
+                showToast('Preset loaded!', 'success');
+            } catch (e) { showToast('Failed to load: ' + e.message); }
+        }
+
+        async function deleteCommunityPreset(id, btn) {
+            if (!confirm('Delete this preset?')) return;
+            const resp = await fetch(`/api/community/delete/${id}`, { method: 'DELETE' });
+            const data = await resp.json();
+            if (data.success) { loadCommunity(); showToast('Deleted', 'success'); }
+            else showToast(data.error || 'Delete failed');
+        }
+
+        function openShareModal() {
+            const img = currentImage;
+            const msgEl = document.getElementById('shareThumbMsg');
+            const imgEl = document.getElementById('shareThumbImg');
+            document.getElementById('shareError').textContent = '';
+            document.getElementById('shareTitle').value = '';
+            if (img) {
+                imgEl.src = `data:image/png;base64,${img}`;
+                imgEl.style.display = 'block';
+                msgEl.textContent = '';
+            } else {
+                imgEl.style.display = 'none';
+                msgEl.textContent = '⚠️ Generate an image first to include it in the preset.';
+            }
+            document.getElementById('shareModal').style.display = 'flex';
+        }
+
+        function closeShareModal() {
+            document.getElementById('shareModal').style.display = 'none';
+        }
+
+        async function submitShare() {
+            const title = document.getElementById('shareTitle').value.trim();
+            const errEl = document.getElementById('shareError');
+            const btn = document.getElementById('shareSubmitBtn');
+            if (!title) { errEl.textContent = 'Please enter a title.'; return; }
+            if (!currentImage) { errEl.textContent = 'Generate an image first!'; return; }
+
+            // Build a compressed thumb from currentImage via canvas
+            const thumbB64 = await compressToThumb(currentImage);
+
+            // Gather current settings
+            const preset = {
+                prompt: document.getElementById('promptInput').value,
+                negative: document.getElementById('negativePrompt').value,
+                backend: currentBackend,
+                model: document.getElementById('modalModel')?.value || '',
+                steps: document.getElementById('modalSteps')?.value || 25,
+                cfg_scale: document.getElementById('modalCfgScale')?.value || 7,
+                width: document.getElementById('modalWidth')?.value || 1024,
+                height: document.getElementById('modalHeight')?.value || 1024,
+                scheduler: document.getElementById('modalScheduler')?.value || 'Euler',
+            };
+
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sharing...';
+            try {
+                const resp = await fetch('/api/community/share', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ title, image_thumb: thumbB64, preset_json: JSON.stringify(preset) })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                closeShareModal();
+                showToast('Preset shared with the community!', 'success');
+            } catch (e) { errEl.textContent = e.message; }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-share-alt"></i> Share'; }
+        }
+
+        async function compressToThumb(b64, quality = 0.8, maxSize = 320) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width, h = img.height;
+                    if (w > maxSize || h > maxSize) {
+                        const ratio = Math.min(maxSize / w, maxSize / h);
+                        w = Math.round(w * ratio); h = Math.round(h * ratio);
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    resolve(dataUrl.split(',')[1]);
+                };
+                img.src = `data:image/png;base64,${b64}`;
+            });
         }
 
         // Init tools drop zones

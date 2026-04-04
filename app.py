@@ -101,6 +101,15 @@ def init_db():
             is_admin BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
+        db_execute(conn, '''CREATE TABLE IF NOT EXISTS community_presets (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(100) NOT NULL,
+            title VARCHAR(200) NOT NULL,
+            image_thumb TEXT NOT NULL,
+            preset_json TEXT NOT NULL,
+            likes INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
     else:
         db_execute(conn, '''CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,6 +117,15 @@ def init_db():
             password_hash TEXT NOT NULL,
             images_remaining INTEGER DEFAULT 3,
             is_admin BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        db_execute(conn, '''CREATE TABLE IF NOT EXISTS community_presets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            title TEXT NOT NULL,
+            image_thumb TEXT NOT NULL,
+            preset_json TEXT NOT NULL,
+            likes INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
     conn.commit()
@@ -128,6 +146,7 @@ def init_db():
         db_execute(conn, 'UPDATE users SET is_admin = TRUE, images_remaining = -1 WHERE username = ?', (admin_user,))
         conn.commit()
     conn.close()
+
 
 
 def get_current_user():
@@ -948,6 +967,104 @@ Rules:
         print(f"[Tools] Char-to-prompt error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+
+# ===============================
+# COMMUNITY ROUTES
+# ===============================
+
+@app.route('/api/community/presets', methods=['GET'])
+def community_list():
+    """List community presets — public"""
+    sort = request.args.get('sort', 'recent')  # 'recent' or 'popular'
+    order = 'created_at DESC' if sort == 'recent' else 'likes DESC'
+    conn = get_db()
+    rows = db_fetchall(conn, f'SELECT id, username, title, image_thumb, likes, created_at FROM community_presets ORDER BY {order} LIMIT 50')
+    conn.close()
+    presets = []
+    for r in rows:
+        presets.append({
+            'id': r['id'], 'username': r['username'], 'title': r['title'],
+            'image_thumb': r['image_thumb'], 'likes': r['likes'],
+            'created_at': str(r['created_at'])
+        })
+    return jsonify({'presets': presets})
+
+
+@app.route('/api/community/presets/<int:preset_id>', methods=['GET'])
+def community_get(preset_id):
+    """Get a single preset with full data"""
+    conn = get_db()
+    row = db_fetchone(conn, 'SELECT * FROM community_presets WHERE id = ?', (preset_id,))
+    conn.close()
+    if not row:
+        return jsonify({'error': 'Preset not found'}), 404
+    return jsonify({
+        'id': row['id'], 'username': row['username'], 'title': row['title'],
+        'image_thumb': row['image_thumb'], 'preset_json': row['preset_json'],
+        'likes': row['likes'], 'created_at': str(row['created_at'])
+    })
+
+
+@app.route('/api/community/share', methods=['POST'])
+def community_share():
+    """Share a preset — requires login"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+    data = request.json
+    title = data.get('title', '').strip()[:200]
+    image_thumb = data.get('image_thumb', '')
+    preset_json = data.get('preset_json', '')
+    if not title:
+        return jsonify({'error': 'Title required'}), 400
+    if not image_thumb:
+        return jsonify({'error': 'Image required'}), 400
+    if not preset_json:
+        return jsonify({'error': 'Preset data required'}), 400
+    conn = get_db()
+    db_execute(conn,
+        'INSERT INTO community_presets (username, title, image_thumb, preset_json) VALUES (?, ?, ?, ?)',
+        (user['username'], title, image_thumb, preset_json)
+    )
+    conn.commit()
+    conn.close()
+    log('INFO', f"Community: '{user['username']}' shared preset '{title}'")
+    return jsonify({'success': True})
+
+
+@app.route('/api/community/like/<int:preset_id>', methods=['POST'])
+def community_like(preset_id):
+    """Like a preset — requires login"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+    conn = get_db()
+    db_execute(conn, 'UPDATE community_presets SET likes = likes + 1 WHERE id = ?', (preset_id,))
+    conn.commit()
+    row = db_fetchone(conn, 'SELECT likes FROM community_presets WHERE id = ?', (preset_id,))
+    conn.close()
+    return jsonify({'success': True, 'likes': row['likes'] if row else 0})
+
+
+@app.route('/api/community/delete/<int:preset_id>', methods=['DELETE'])
+def community_delete(preset_id):
+    """Delete a preset — admin or own presets only"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Login required'}), 401
+    conn = get_db()
+    row = db_fetchone(conn, 'SELECT username FROM community_presets WHERE id = ?', (preset_id,))
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Not found'}), 404
+    if not user['is_admin'] and row['username'] != user['username']:
+        conn.close()
+        return jsonify({'error': 'Forbidden'}), 403
+    db_execute(conn, 'DELETE FROM community_presets WHERE id = ?', (preset_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
 
 # ===============================
