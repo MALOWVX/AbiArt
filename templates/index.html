@@ -1101,9 +1101,9 @@
                 const vaeSelect = document.getElementById('modalVae');
                 if (data.vaes && vaeSelect) vaeSelect.innerHTML = data.vaes.map(v => `<option value="${v}">${v}</option>`).join('');
                 updateActiveLorasDisplay();
-                // Apply pending recycle model if one is waiting
+                // Apply pending recycle model (queued while select was loading)
                 if (window._pendingRecycleModel) {
-                    setSelect('modalModel', window._pendingRecycleModel);
+                    uiSetSelect('modalModel', window._pendingRecycleModel);
                     window._pendingRecycleModel = null;
                 }
             } catch (e) {
@@ -1750,54 +1750,27 @@
             if (!item || !item.info) { showToast('No parameters to recycle'); return; }
             const info = item.info;
 
-            // Switch backend first
-            if (info._backend) setBackend(info._backend);
-
             // Restore prompt & negative
             if (info._prompt !== undefined) document.getElementById('promptInput').value = info._prompt;
             if (info._negative !== undefined) document.getElementById('negativePrompt').value = info._negative;
 
-            // Helper: set a select value with fuzzy fallback
-            function setSelect(id, val) {
-                if (!val) return;
-                const sel = document.getElementById(id);
-                if (!sel) return;
-                // Try exact match first
-                const opts = Array.from(sel.options);
-                let match = opts.find(o => o.value === val || o.text === val);
-                if (!match) match = opts.find(o => o.value.toLowerCase().includes(val.toLowerCase()) || val.toLowerCase().includes(o.value.toLowerCase()));
-                if (match) sel.value = match.value;
-            }
-
-            // Helper: set slider + number input
-            function setSlider(sliderId, inputId, val) {
-                if (!val) return;
-                const s = document.getElementById(sliderId);
-                const i = document.getElementById(inputId);
-                if (s) s.value = val;
-                if (i) i.value = val;
-            }
-
             if (currentBackend === 'modal') {
                 if (info.seed !== undefined) document.getElementById('modalSeed').value = info.seed;
-                setSlider('modalSteps', 'modalStepsVal', info.steps);
-                setSlider('modalCfgScale', 'modalCfgVal', info.cfg_scale);
+                uiSetSlider('modalSteps', 'modalStepsVal', info.steps);
+                uiSetSlider('modalCfgScale', 'modalCfgVal', info.cfg_scale);
                 if (info.width) document.getElementById('modalWidth').value = info.width;
                 if (info.height) document.getElementById('modalHeight').value = info.height;
-                setSelect('modalScheduler', info.scheduler);
-                setSlider('modalClipSkip', 'modalClipSkipVal', info.clip_skip);
-                if (info.vae) setSelect('modalVae', info.vae);
+                uiSetSelect('modalScheduler', info.scheduler);
+                uiSetSlider('modalClipSkip', 'modalClipSkipVal', info.clip_skip);
+                if (info.vae) uiSetSelect('modalVae', info.vae);
                 const modelVal = info._model || info.model;
                 if (modelVal) {
-                    // Try to set model immediately; if select still loading, queue it
                     const sel = document.getElementById('modalModel');
-                    const opts = Array.from(sel.options);
-                    const isLoading = opts.length === 1 && opts[0].value === 'default' && opts[0].text === 'Loading...';
-                    if (isLoading || opts.length === 0) {
+                    const stillLoading = sel.options.length <= 1 && (sel.options[0]?.text === 'Loading...' || sel.options.length === 0);
+                    if (stillLoading) {
                         window._pendingRecycleModel = modelVal;
-                        showToast('Model will be applied once list loads...', 'success');
                     } else {
-                        setSelect('modalModel', modelVal);
+                        uiSetSelect('modalModel', modelVal);
                     }
                 }
                 if (info._loras) {
@@ -1805,25 +1778,43 @@
                     updateActiveLorasDisplay();
                 }
             } else if (currentBackend === 'kaggle') {
-                setSlider('steps', 'stepsVal', info.steps);
-                setSlider('cfgScale', 'cfgVal', info.cfg_scale);
-                if (info.width && info.height) {
-                    const sizeStr = `${info.width}x${info.height}`;
-                    setSelect('imgSize', sizeStr);
-                }
-                setSelect('kaggleModel', info._model || info.model);
-                if (info._loras) {
-                    activeLoRAs = JSON.parse(JSON.stringify(info._loras));
-                    updateLorasDisplay();
-                }
+                uiSetSlider('steps', 'stepsVal', info.steps);
+                uiSetSlider('cfgScale', 'cfgVal', info.cfg_scale);
+                if (info.width && info.height) uiSetSelect('imgSize', `${info.width}x${info.height}`);
+                uiSetSelect('kaggleModel', info._model || info.model);
+                if (info._loras) { activeLoRAs = JSON.parse(JSON.stringify(info._loras)); updateLorasDisplay(); }
             } else if (currentBackend === 'huggingface') {
-                const g = info.guidance_scale || info.cfg_scale;
-                setSlider('hfGuidance', 'hfGuidanceVal', g);
-                setSelect('hfModel', info._model || info.model);
+                uiSetSlider('hfGuidance', 'hfGuidanceVal', info.guidance_scale || info.cfg_scale);
+                uiSetSelect('hfModel', info._model || info.model);
             }
 
             if (typeof autoSaveSettings === 'function') autoSaveSettings();
-            showToast('♻ Settings recycled!', 'success');
+            showToast('\u267b Settings recycled!', 'success');
+        }
+
+        // ========== UI HELPERS (global scope) ==========
+        // Set a <select> value with fuzzy fallback matching
+        function uiSetSelect(id, val) {
+            if (val === undefined || val === null || val === '') return;
+            val = String(val);
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const opts = Array.from(sel.options);
+            let match = opts.find(o => o.value === val || o.text === val);
+            if (!match) match = opts.find(o =>
+                o.value.toLowerCase().includes(val.toLowerCase()) ||
+                val.toLowerCase().includes(o.value.toLowerCase())
+            );
+            if (match) sel.value = match.value;
+        }
+
+        // Set range slider + linked number input
+        function uiSetSlider(sliderId, inputId, val) {
+            if (val === undefined || val === null || val === '') return;
+            const s = document.getElementById(sliderId);
+            const inp = document.getElementById(inputId);
+            if (s) s.value = val;
+            if (inp) inp.value = val;
         }
 
         // ========== UTILITIES ==========
