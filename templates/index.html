@@ -1920,8 +1920,31 @@
         function autoSaveSettings() {
             localStorage.setItem('abiart_last_settings', JSON.stringify(gatherSettings()));
         }
-        // Listen for changes on all settings
+
+        // === Comma → Period fix for French locale (5,6 → 5.6) ===
+        const _sliderForInput = {
+            'modalCfgVal': 'modalCfgScale', 'modalStepsVal': 'modalSteps',
+            'modalClipSkipVal': 'modalClipSkip', 'hfGuidanceVal': 'hfGuidance',
+            'cfgVal': 'cfgScale', 'stepsVal': 'steps',
+            'modalAdStrengthVal': 'modalAdStrength', 'modalAdStepsVal': 'modalAdSteps',
+            'modalHiresScaleVal': 'modalHiresScale', 'modalHiresDenoiseVal': 'modalHiresDenoising',
+            'modalHiresStepsVal': 'modalHiresSteps'
+        };
         document.addEventListener('input', (e) => {
+            // Normalize comma decimal separator (French locale)
+            if (e.target.type === 'number' && e.target.value.includes(',')) {
+                const cursor = e.target.selectionStart;
+                e.target.value = e.target.value.replace(',', '.');
+                try { e.target.setSelectionRange(cursor, cursor); } catch(_) {}
+            }
+            // Sync number input → paired range slider
+            if (VAL_INPUT_IDS.includes(e.target.id)) {
+                const sliderId = _sliderForInput[e.target.id];
+                if (sliderId) {
+                    const slider = document.getElementById(sliderId);
+                    if (slider) slider.value = e.target.value;
+                }
+            }
             if (SETTINGS_IDS.includes(e.target.id) || VAL_INPUT_IDS.includes(e.target.id)) autoSaveSettings();
         });
         document.addEventListener('change', (e) => {
