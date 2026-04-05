@@ -20,7 +20,8 @@
     <div id="authOverlay" class="auth-overlay">
         <div class="auth-box">
             <div class="auth-logo">
-                <div class="logo-icon" style="width:48px;height:48px;font-size:1.5rem"><i class="fas fa-wand-magic-sparkles"></i></div>
+                <div class="logo-icon" style="width:48px;height:48px;font-size:1.5rem"><i
+                        class="fas fa-wand-magic-sparkles"></i></div>
                 <h1 style="font-family:Graduate,serif;font-size:1.8rem;margin:.5rem 0 0">AbiArt</h1>
                 <p style="color:var(--muted);font-size:.75rem;margin:.25rem 0 0">AI Image Studio</p>
             </div>
@@ -31,20 +32,25 @@
             <form id="authForm" onsubmit="handleAuth(event)">
                 <div class="auth-field">
                     <label>Username</label>
-                    <input type="text" id="authUsername" placeholder="Enter your username" autocomplete="username" required minlength="3">
+                    <input type="text" id="authUsername" placeholder="Enter your username" autocomplete="username"
+                        required minlength="3">
                 </div>
                 <div class="auth-field">
                     <label>Password</label>
                     <div class="pw-wrap">
-                        <input type="password" id="authPassword" placeholder="Enter your password" autocomplete="current-password" required minlength="4">
-                        <button type="button" class="pw-eye" onclick="togglePw('authPassword',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+                        <input type="password" id="authPassword" placeholder="Enter your password"
+                            autocomplete="current-password" required minlength="4">
+                        <button type="button" class="pw-eye" onclick="togglePw('authPassword',this)" tabindex="-1"><i
+                                class="fas fa-eye"></i></button>
                     </div>
                 </div>
                 <div class="auth-field" id="confirmField" style="display:none">
                     <label>Confirm Password</label>
                     <div class="pw-wrap">
-                        <input type="password" id="authPasswordConfirm" placeholder="Repeat your password" minlength="4">
-                        <button type="button" class="pw-eye" onclick="togglePw('authPasswordConfirm',this)" tabindex="-1"><i class="fas fa-eye"></i></button>
+                        <input type="password" id="authPasswordConfirm" placeholder="Repeat your password"
+                            minlength="4">
+                        <button type="button" class="pw-eye" onclick="togglePw('authPasswordConfirm',this)"
+                            tabindex="-1"><i class="fas fa-eye"></i></button>
                     </div>
                 </div>
                 <button type="submit" class="auth-submit" id="authSubmitBtn">
@@ -58,16 +64,19 @@
 
     <!-- Tools Panel Overlay -->
     <!-- Tutorial Overlay -->
-    <div id="tutorialOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:20000;pointer-events:none">
+    <div id="tutorialOverlay"
+        style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:20000;pointer-events:none">
         <div class="tut-box" id="tutBox">
             <div class="tut-header">
                 <span class="tut-step-label" id="tutStepLabel">Step 1 / 5</span>
-                <button class="tools-close" onclick="skipTutorial()" style="pointer-events:all"><i class="fas fa-times"></i></button>
+                <button class="tools-close" onclick="skipTutorial()" style="pointer-events:all"><i
+                        class="fas fa-times"></i></button>
             </div>
             <div class="tut-body" id="tutBody"></div>
             <div class="tut-footer">
                 <button class="btn btn-sm" onclick="skipTutorial()" style="pointer-events:all">Skip</button>
-                <button class="btn-accent" onclick="nextTutStep()" id="tutNextBtn" style="pointer-events:all"><i class="fas fa-arrow-right"></i> Next</button>
+                <button class="btn-accent" onclick="nextTutStep()" id="tutNextBtn" style="pointer-events:all"><i
+                        class="fas fa-arrow-right"></i> Next</button>
             </div>
         </div>
         <div class="tut-backdrop" id="tutBackdrop"></div>
@@ -86,11 +95,14 @@
                         <option value="recent">🕐 Recent</option>
                         <option value="popular">🔥 Popular</option>
                     </select>
-                    <button class="btn btn-sm" onclick="openShareModal()" style="border-color:var(--accent2);color:var(--accent2)"><i class="fas fa-share-alt"></i> Share my Preset</button>
+                    <button class="btn btn-sm" onclick="openShareModal()"
+                        style="border-color:var(--accent2);color:var(--accent2)"><i class="fas fa-share-alt"></i> Share
+                        my Preset</button>
                     <button class="tools-close" onclick="closeCommunity()"><i class="fas fa-times"></i></button>
                 </div>
             </div>
-            <div class="tools-body" id="communityGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;padding:1rem">
+            <div class="tools-body" id="communityGrid"
+                style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;padding:1rem">
                 <div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:2rem">
                     <i class="fas fa-spinner fa-spin" style="font-size:1.5rem"></i>
                     <p style="margin:.5rem 0 0;font-size:.8rem">Loading...</p>
@@ -103,17 +115,21 @@
     <div id="shareModal" class="tools-overlay" style="display:none">
         <div class="tools-container" style="max-width:420px">
             <div class="tools-header">
-                <h2 style="font-family:Graduate,serif;font-size:1rem;margin:0"><i class="fas fa-share-alt" style="color:var(--accent2)"></i> Share Preset</h2>
+                <h2 style="font-family:Graduate,serif;font-size:1rem;margin:0"><i class="fas fa-share-alt"
+                        style="color:var(--accent2)"></i> Share Preset</h2>
                 <button class="tools-close" onclick="closeShareModal()"><i class="fas fa-times"></i></button>
             </div>
             <div style="padding:1rem">
-                <p class="tool-desc"><i class="fas fa-info-circle"></i> Share your current settings + the generated image with the community.</p>
+                <p class="tool-desc"><i class="fas fa-info-circle"></i> Share your current settings + the generated
+                    image with the community.</p>
                 <div class="auth-field" style="margin-bottom:.75rem">
                     <label style="font-family:Graduate,serif;font-size:.7rem;color:var(--accent2)">Title</label>
-                    <input type="text" id="shareTitle" placeholder="e.g: Cinematic Portrait SDXL" maxlength="100" style="width:100%">
+                    <input type="text" id="shareTitle" placeholder="e.g: Cinematic Portrait SDXL" maxlength="100"
+                        style="width:100%">
                 </div>
                 <div id="shareThumbPreview" style="text-align:center;margin:.5rem 0">
-                    <img id="shareThumbImg" style="max-height:120px;border:1px solid var(--dim)" src="" onerror="this.style.display='none'">
+                    <img id="shareThumbImg" style="max-height:120px;border:1px solid var(--dim)" src=""
+                        onerror="this.style.display='none'">
                     <p id="shareThumbMsg" style="font-size:.7rem;color:var(--muted)"></p>
                 </div>
                 <p id="shareError" style="color:var(--error);font-size:.7rem"></p>
@@ -134,16 +150,21 @@
                 <button class="tools-close" onclick="closeTools()"><i class="fas fa-times"></i></button>
             </div>
             <div class="tools-tabs">
-                <button class="tool-tab active" data-tool="tagger" onclick="switchTool('tagger')"><i class="fas fa-tags"></i> Image → Tags</button>
-                <button class="tool-tab" data-tool="metadata" onclick="switchTool('metadata')"><i class="fas fa-file-alt"></i> Metadata</button>
-                <button class="tool-tab" data-tool="weights" onclick="switchTool('weights')"><i class="fas fa-balance-scale"></i> Weights</button>
-                <button class="tool-tab" data-tool="chargen" onclick="switchTool('chargen')"><i class="fas fa-user-edit"></i> Char→Prompt</button>
+                <button class="tool-tab active" data-tool="tagger" onclick="switchTool('tagger')"><i
+                        class="fas fa-tags"></i> Image → Tags</button>
+                <button class="tool-tab" data-tool="metadata" onclick="switchTool('metadata')"><i
+                        class="fas fa-file-alt"></i> Metadata</button>
+                <button class="tool-tab" data-tool="weights" onclick="switchTool('weights')"><i
+                        class="fas fa-balance-scale"></i> Weights</button>
+                <button class="tool-tab" data-tool="chargen" onclick="switchTool('chargen')"><i
+                        class="fas fa-user-edit"></i> Char→Prompt</button>
             </div>
             <div class="tools-body">
 
                 <!-- Tool 1: Image Tagger -->
                 <div id="tool_tagger" class="tool-panel">
-                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Upload an image to generate Danbooru-style tags using WD Tagger AI. Tags are compatible with A1111/Forge prompts.</p>
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Upload an image to generate Danbooru-style
+                        tags using WD Tagger AI. Tags are compatible with A1111/Forge prompts.</p>
                     <div class="tool-drop-zone" id="taggerDropZone">
                         <i class="fas fa-cloud-upload-alt"></i>
                         <p>Drop image or click to upload</p>
@@ -154,19 +175,23 @@
                     </div>
                     <div style="display:flex;gap:.75rem;align-items:center;margin:.5rem 0">
                         <label style="font-size:.7rem;color:var(--muted);white-space:nowrap">Threshold</label>
-                        <input type="range" id="taggerThreshold" min="0.1" max="0.9" step="0.05" value="0.35" style="flex:1"
-                            oninput="document.getElementById('taggerThreshVal').textContent=this.value">
+                        <input type="range" id="taggerThreshold" min="0.1" max="0.9" step="0.05" value="0.35"
+                            style="flex:1" oninput="document.getElementById('taggerThreshVal').textContent=this.value">
                         <span id="taggerThreshVal" style="font-size:.7rem;color:var(--accent2);width:2rem">0.35</span>
                     </div>
                     <button class="btn-accent" onclick="runTagger()" id="taggerBtn" style="margin:.5rem 0">
                         <i class="fas fa-tags"></i> Generate Tags
                     </button>
                     <div id="taggerResult" style="display:none">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin:.75rem 0 .5rem">
+                        <div
+                            style="display:flex;justify-content:space-between;align-items:center;margin:.75rem 0 .5rem">
                             <h3 style="font-family:Graduate,serif;font-size:.9rem;margin:0">Generated Tags</h3>
                             <div style="display:flex;gap:.3rem">
-                                <button class="btn btn-sm" onclick="copyTaggerTags()"><i class="fas fa-copy"></i> Copy</button>
-                                <button class="btn btn-sm" onclick="sendTagsToPrompt()" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
+                                <button class="btn btn-sm" onclick="copyTaggerTags()"><i class="fas fa-copy"></i>
+                                    Copy</button>
+                                <button class="btn btn-sm" onclick="sendTagsToPrompt()"
+                                    style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To
+                                    Prompt</button>
                             </div>
                         </div>
                         <div id="taggerTags" class="tag-cloud"></div>
@@ -176,49 +201,63 @@
 
                 <!-- Tool 2: Metadata Reader -->
                 <div id="tool_metadata" class="tool-panel" style="display:none">
-                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Drop an AI-generated PNG to read its embedded generation parameters (A1111, Forge, ComfyUI).</p>
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Drop an AI-generated PNG to read its
+                        embedded generation parameters (A1111, Forge, ComfyUI).</p>
                     <div class="tool-drop-zone" id="metadataDropZone">
                         <i class="fas fa-file-image"></i>
                         <p>Drop a PNG file</p>
                         <input type="file" id="metadataFileInput" accept=".png" hidden>
                     </div>
                     <div id="metadataResult" style="display:none">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin:.75rem 0 .5rem">
+                        <div
+                            style="display:flex;justify-content:space-between;align-items:center;margin:.75rem 0 .5rem">
                             <h3 style="font-family:Graduate,serif;font-size:.9rem;margin:0">Generation Parameters</h3>
                             <div style="display:flex;gap:.3rem">
-                                <button class="btn btn-sm" onclick="loadMetadataSettings()"><i class="fas fa-cog"></i> Load Settings</button>
-                                <button class="btn btn-sm" onclick="toggleMetadataRaw()"><i class="fas fa-code"></i> Raw</button>
+                                <button class="btn btn-sm" onclick="loadMetadataSettings()"><i class="fas fa-cog"></i>
+                                    Load Settings</button>
+                                <button class="btn btn-sm" onclick="toggleMetadataRaw()"><i class="fas fa-code"></i>
+                                    Raw</button>
                             </div>
                         </div>
                         <div id="metadataContent"></div>
                         <div id="metadataRaw" style="display:none;margin-top:.75rem">
-                            <pre id="metadataRawText" style="font-size:.6rem;max-height:200px;overflow:auto;padding:.5rem;background:var(--bg);border:1px solid var(--dim);color:var(--muted)"></pre>
+                            <pre id="metadataRawText"
+                                style="font-size:.6rem;max-height:200px;overflow:auto;padding:.5rem;background:var(--bg);border:1px solid var(--dim);color:var(--muted)"></pre>
                         </div>
                     </div>
                 </div>
 
                 <!-- Tool 3: Prompt Weight Helper -->
                 <div id="tool_weights" class="tool-panel" style="display:none">
-                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Paste a comma-separated prompt and visually adjust (tag:weight) values for each token.</p>
-                    <textarea id="weightInput" placeholder="Paste prompt here, e.g: 1girl, blue hair, school uniform, masterpiece" rows="3"></textarea>
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Paste a comma-separated prompt and visually
+                        adjust (tag:weight) values for each token.</p>
+                    <textarea id="weightInput"
+                        placeholder="Paste prompt here, e.g: 1girl, blue hair, school uniform, masterpiece"
+                        rows="3"></textarea>
                     <button class="btn btn-sm" onclick="parseWeightTokens()" style="margin:.5rem 0">
                         <i class="fas fa-cog"></i> Parse Tokens
                     </button>
                     <div id="weightTokens" class="weight-tokens"></div>
                     <div id="weightOutput" style="display:none;margin-top:.75rem">
-                        <label style="font-size:.7rem;color:var(--muted);display:block;margin-bottom:.25rem">Formatted Output</label>
+                        <label style="font-size:.7rem;color:var(--muted);display:block;margin-bottom:.25rem">Formatted
+                            Output</label>
                         <textarea id="weightOutputText" rows="3" readonly></textarea>
                         <div style="display:flex;gap:.3rem;margin-top:.5rem">
-                            <button class="btn btn-sm" onclick="copyWeightOutput()"><i class="fas fa-copy"></i> Copy</button>
-                            <button class="btn btn-sm" onclick="sendWeightToPrompt()" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
+                            <button class="btn btn-sm" onclick="copyWeightOutput()"><i class="fas fa-copy"></i>
+                                Copy</button>
+                            <button class="btn btn-sm" onclick="sendWeightToPrompt()"
+                                style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Tool 4: Character → Prompt -->
                 <div id="tool_chargen" class="tool-panel" style="display:none">
-                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Describe a character in natural language and AI will generate an optimized Stable Diffusion prompt with Danbooru-style tags.</p>
-                    <textarea id="chargenInput" placeholder="Ex: A tall girl with long silver hair and red eyes, wearing a black military coat, standing in the rain at night with a katana" rows="4"></textarea>
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Describe a character in natural language and
+                        AI will generate an optimized Stable Diffusion prompt with Danbooru-style tags.</p>
+                    <textarea id="chargenInput"
+                        placeholder="Ex: A tall girl with long silver hair and red eyes, wearing a black military coat, standing in the rain at night with a katana"
+                        rows="4"></textarea>
                     <div style="display:flex;gap:.5rem;align-items:center;margin:.5rem 0">
                         <label style="font-size:.7rem;color:var(--muted);white-space:nowrap">Style</label>
                         <select id="chargenStyle" style="flex:1">
@@ -232,19 +271,33 @@
                     </button>
                     <div id="chargenResult" style="display:none">
                         <div style="margin-top:.75rem">
-                            <label style="font-size:.7rem;color:var(--accent2);font-family:Graduate,serif;display:block;margin-bottom:.25rem">Positive Prompt</label>
+                            <label
+                                style="font-size:.7rem;color:var(--accent2);font-family:Graduate,serif;display:block;margin-bottom:.25rem">Positive
+                                Prompt</label>
                             <textarea id="chargenPositive" rows="4" readonly></textarea>
                             <div style="display:flex;gap:.3rem;margin-top:.3rem">
-                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('chargenPositive').value);showToast('Copied!','success')"><i class="fas fa-copy"></i> Copy</button>
-                                <button class="btn btn-sm" onclick="document.getElementById('promptInput').value=document.getElementById('chargenPositive').value;closeTools();showToast('Prompt set!','success')" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Prompt</button>
+                                <button class="btn btn-sm"
+                                    onclick="navigator.clipboard.writeText(document.getElementById('chargenPositive').value);showToast('Copied!','success')"><i
+                                        class="fas fa-copy"></i> Copy</button>
+                                <button class="btn btn-sm"
+                                    onclick="document.getElementById('promptInput').value=document.getElementById('chargenPositive').value;closeTools();showToast('Prompt set!','success')"
+                                    style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To
+                                    Prompt</button>
                             </div>
                         </div>
                         <div style="margin-top:.75rem">
-                            <label style="font-size:.7rem;color:var(--accent2);font-family:Graduate,serif;display:block;margin-bottom:.25rem">Negative Prompt</label>
+                            <label
+                                style="font-size:.7rem;color:var(--accent2);font-family:Graduate,serif;display:block;margin-bottom:.25rem">Negative
+                                Prompt</label>
                             <textarea id="chargenNegative" rows="2" readonly></textarea>
                             <div style="display:flex;gap:.3rem;margin-top:.3rem">
-                                <button class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('chargenNegative').value);showToast('Copied!','success')"><i class="fas fa-copy"></i> Copy</button>
-                                <button class="btn btn-sm" onclick="document.getElementById('negativePrompt').value=document.getElementById('chargenNegative').value;showToast('Negative set!','success')" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To Negative</button>
+                                <button class="btn btn-sm"
+                                    onclick="navigator.clipboard.writeText(document.getElementById('chargenNegative').value);showToast('Copied!','success')"><i
+                                        class="fas fa-copy"></i> Copy</button>
+                                <button class="btn btn-sm"
+                                    onclick="document.getElementById('negativePrompt').value=document.getElementById('chargenNegative').value;showToast('Negative set!','success')"
+                                    style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> To
+                                    Negative</button>
                             </div>
                         </div>
                         <button class="btn-accent" onclick="applyCharGenBoth()" style="margin-top:.75rem;width:100%">
@@ -272,12 +325,16 @@
                 <button class="backend-btn" data-backend="modal" onclick="setBackend('modal')"><i
                         class="fas fa-bolt"></i> Modal</button>
             </div>
-            <button class="tools-btn" onclick="openCommunity()" title="Community" style="border-color:var(--accent2);color:var(--accent2)" id="communityHeaderBtn"><i class="fas fa-users"></i> Community</button>
+            <button class="tools-btn" onclick="openCommunity()" title="Community"
+                style="border-color:var(--accent2);color:var(--accent2)" id="communityHeaderBtn"><i
+                    class="fas fa-users"></i> Community</button>
             <button class="tools-btn" onclick="openTools()" title="Tools"><i class="fas fa-wrench"></i> Tools</button>
             <div class="user-badge" id="userBadge" style="display:none">
-                <span class="credits-display" id="creditsDisplay" title="Images remaining"><i class="fas fa-image"></i> <span id="creditsCount">3</span></span>
+                <span class="credits-display" id="creditsDisplay" title="Images remaining"><i class="fas fa-image"></i>
+                    <span id="creditsCount">3</span></span>
                 <span class="user-name" id="userName"></span>
-                <button class="user-logout" onclick="logoutUser()" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+                <button class="user-logout" onclick="logoutUser()" title="Logout"><i
+                        class="fas fa-sign-out-alt"></i></button>
             </div>
             <div class="status-badge">
                 <span class="status-dot" id="statusDot"></span>
@@ -524,7 +581,8 @@
                             <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
                                 <input type="checkbox" id="modalAdetailer"> Enable ADetailer
                             </label>
-                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem;margin-top:.3rem">
+                            <label
+                                style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem;margin-top:.3rem">
                                 <input type="checkbox" id="modalAdSameCheckpoint" checked> Use generation checkpoint
                             </label>
                             <div class="field">
@@ -1545,7 +1603,7 @@
                 genInfo._final_prompt = finalPrompt; // Prompt with triggers sent to API
                 genInfo._negative = document.getElementById('negativePrompt').value;
                 genInfo._backend = currentBackend;
-                
+
                 if (currentBackend === 'modal') {
                     genInfo._loras = JSON.parse(JSON.stringify(activeModalLoras));
                     genInfo.model = document.getElementById('modalModel').value;
@@ -1935,7 +1993,7 @@
             if (e.target.type === 'number' && e.target.value.includes(',')) {
                 const cursor = e.target.selectionStart;
                 e.target.value = e.target.value.replace(',', '.');
-                try { e.target.setSelectionRange(cursor, cursor); } catch(_) {}
+                try { e.target.setSelectionRange(cursor, cursor); } catch (_) { }
             }
             // Sync number input → paired range slider
             if (VAL_INPUT_IDS.includes(e.target.id)) {
@@ -2059,14 +2117,14 @@
             try {
                 const threshold = parseFloat(document.getElementById('taggerThreshold').value);
                 const resp = await fetch('/api/tools/tag-image', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image: _taggerImageB64, threshold })
                 });
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
                 const tags = data.tags || [];
                 document.getElementById('taggerTags').innerHTML = tags.map(t =>
-                    `<span class="tag-chip" onclick="this.classList.toggle('selected')">${t.replace(/_/g,' ')}</span>`
+                    `<span class="tag-chip" onclick="this.classList.toggle('selected')">${t.replace(/_/g, ' ')}</span>`
                 ).join('');
                 document.getElementById('taggerTagsText').value = data.tags_string || tags.join(', ');
                 document.getElementById('taggerResult').style.display = 'block';
@@ -2117,7 +2175,7 @@
                         const j = JSON.parse(paramText);
                         document.getElementById('metadataContent').innerHTML =
                             '<p style="color:var(--muted);font-size:.75rem">ComfyUI workflow detected</p>' +
-                            '<pre style="font-size:.65rem;max-height:300px;overflow:auto;color:var(--text)">' + JSON.stringify(j,null,2) + '</pre>';
+                            '<pre style="font-size:.65rem;max-height:300px;overflow:auto;color:var(--text)">' + JSON.stringify(j, null, 2) + '</pre>';
                     } catch { document.getElementById('metadataContent').innerHTML = '<p>Could not parse metadata</p>'; }
                 } else {
                     document.getElementById('metadataContent').innerHTML = '<p style="color:var(--muted)">Unknown metadata format</p>';
@@ -2128,24 +2186,24 @@
         }
         function parsePNGChunks(buf) {
             const view = new DataView(buf);
-            const sig = [0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A];
+            const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
             for (let i = 0; i < 8; i++) { if (view.getUint8(i) !== sig[i]) return null; }
             let off = 8; const meta = {};
             while (off < view.byteLength) {
                 const len = view.getUint32(off);
-                const type = String.fromCharCode(view.getUint8(off+4),view.getUint8(off+5),view.getUint8(off+6),view.getUint8(off+7));
+                const type = String.fromCharCode(view.getUint8(off + 4), view.getUint8(off + 5), view.getUint8(off + 6), view.getUint8(off + 7));
                 if (type === 'tEXt') {
-                    const d = new Uint8Array(buf, off+8, len);
+                    const d = new Uint8Array(buf, off + 8, len);
                     const ni = d.indexOf(0);
                     const key = new TextDecoder().decode(d.slice(0, ni));
-                    const val = new TextDecoder().decode(d.slice(ni+1));
+                    const val = new TextDecoder().decode(d.slice(ni + 1));
                     meta[key] = val;
                 } else if (type === 'iTXt') {
-                    const d = new Uint8Array(buf, off+8, len);
+                    const d = new Uint8Array(buf, off + 8, len);
                     const ni = d.indexOf(0);
                     const key = new TextDecoder().decode(d.slice(0, ni));
-                    let ti = ni+1;
-                    for (let nc=0; nc<4 && ti<d.length; ti++) { if (d[ti]===0) nc++; }
+                    let ti = ni + 1;
+                    for (let nc = 0; nc < 4 && ti < d.length; ti++) { if (d[ti] === 0) nc++; }
                     meta[key] = new TextDecoder().decode(d.slice(ti));
                 }
                 if (type === 'IEND') break;
@@ -2155,7 +2213,7 @@
         }
         function parseA1111Params(text) {
             const lines = text.split('\n');
-            const r = { prompt:'', negative:'', params:{} };
+            const r = { prompt: '', negative: '', params: {} };
             let section = 'prompt';
             for (const line of lines) {
                 if (line.startsWith('Negative prompt:')) {
@@ -2164,7 +2222,7 @@
                     section = 'params';
                     line.split(',').forEach(pair => {
                         const ci = pair.indexOf(':');
-                        if (ci > 0) r.params[pair.substring(0,ci).trim()] = pair.substring(ci+1).trim();
+                        if (ci > 0) r.params[pair.substring(0, ci).trim()] = pair.substring(ci + 1).trim();
                     });
                 } else if (section === 'prompt') {
                     r.prompt += (r.prompt ? '\n' : '') + line;
@@ -2178,7 +2236,7 @@
             let h = '<div class="meta-grid">';
             h += `<div class="meta-field"><label>Prompt</label><div class="meta-val">${p.prompt || '—'}</div></div>`;
             h += `<div class="meta-field"><label>Negative</label><div class="meta-val">${p.negative || '—'}</div></div>`;
-            const paramKeys = ['Steps','Sampler','CFG scale','Seed','Size','Model','Model hash','Clip skip','VAE','Denoising strength','Hires upscaler','Hires upscale'];
+            const paramKeys = ['Steps', 'Sampler', 'CFG scale', 'Seed', 'Size', 'Model', 'Model hash', 'Clip skip', 'VAE', 'Denoising strength', 'Hires upscaler', 'Hires upscale'];
             const grid = paramKeys.filter(k => p.params[k]).map(k =>
                 `<div class="meta-param"><span class="meta-key">${k}</span><span class="meta-pval">${p.params[k]}</span></div>`
             ).join('');
@@ -2189,21 +2247,37 @@
         function loadMetadataSettings() {
             if (!_metadataParsed) { showToast('No parsed settings to load'); return; }
             const p = _metadataParsed;
+            
+            // Metadata mostly corresponds to Modal parameters
+            setBackend('modal');
+
             if (p.prompt) document.getElementById('promptInput').value = p.prompt;
             if (p.negative) document.getElementById('negativePrompt').value = p.negative;
             if (p.params['Seed']) document.getElementById('modalSeed').value = p.params['Seed'];
-            if (p.params['Steps']) { document.getElementById('modalSteps').value = p.params['Steps']; document.getElementById('modalStepsVal').value = p.params['Steps']; }
-            if (p.params['CFG scale']) { document.getElementById('modalCfgScale').value = p.params['CFG scale']; document.getElementById('modalCfgVal').value = p.params['CFG scale']; }
-            if (p.params['Sampler']) document.getElementById('modalScheduler').value = p.params['Sampler'];
-            if (p.params['Clip skip']) { document.getElementById('modalClipSkip').value = p.params['Clip skip']; document.getElementById('modalClipSkipVal').value = p.params['Clip skip']; }
+            if (p.params['Steps']) uiSetSlider('modalSteps', 'modalStepsVal', p.params['Steps']);
+            if (p.params['CFG scale']) uiSetSlider('modalCfgScale', 'modalCfgVal', p.params['CFG scale']);
+            if (p.params['Sampler']) uiSetSelect('modalScheduler', p.params['Sampler']);
+            if (p.params['Clip skip']) uiSetSlider('modalClipSkip', 'modalClipSkipVal', p.params['Clip skip']);
             if (p.params['Size']) {
-                const [w,h] = p.params['Size'].split('x');
+                const [w, h] = p.params['Size'].split('x');
                 if (w) document.getElementById('modalWidth').value = w;
                 if (h) document.getElementById('modalHeight').value = h;
             }
-            setBackend('modal');
+
+            // Extract and queue model
+            if (p.params['Model']) {
+                const sel = document.getElementById('modalModel');
+                const stillLoading = sel && sel.options.length <= 1 && (sel.options[0]?.text === 'Loading...' || sel.options.length === 0);
+                if (stillLoading) {
+                    window._pendingRecycleModel = p.params['Model'];
+                } else {
+                    uiSetSelect('modalModel', p.params['Model']);
+                }
+            }
+            
+            if (typeof autoSaveSettings === 'function') autoSaveSettings();
             closeTools();
-            showToast('Settings loaded from metadata!', 'success');
+            showToast('♻ Settings loaded from metadata!', 'success');
         }
         function toggleMetadataRaw() {
             const el = document.getElementById('metadataRaw');
@@ -2218,7 +2292,7 @@
             const parts = input.split(',').map(s => s.trim()).filter(Boolean);
             _weightTokens = parts.map(tag => {
                 const m = tag.match(/^\((.+):([\d.]+)\)$/);
-                return m ? { text: m[1], weight: parseFloat(m[2]) } : { text: tag.replace(/^\(|\)$/g,''), weight: 1.0 };
+                return m ? { text: m[1], weight: parseFloat(m[2]) } : { text: tag.replace(/^\(|\)$/g, ''), weight: 1.0 };
             });
             renderWeightTokens();
         }
@@ -2268,7 +2342,7 @@
             try {
                 const style = document.getElementById('chargenStyle').value;
                 const resp = await fetch('/api/tools/char-to-prompt', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ description: desc, style })
                 });
                 const data = await resp.json();
@@ -2289,11 +2363,11 @@
 
         // ========== TUTORIAL ==========
         const TUT_STEPS = [
-            { title: '👋 Welcome to AbiArt!', body: 'This is your AI image studio. Let me show you how to use it in 5 quick steps.', target: null },
-            { title: '🖥️ Choose your Backend', body: 'Use the <strong>Modal</strong> button in the top bar. Modal gives you the best quality using a real GPU on the cloud.', target: '.backend-selector' },
-            { title: '✍️ Write your Prompt', body: 'Describe what you want to generate in the <strong>Prompt</strong> box. More detail = better results! You can also use the <strong>Tools → Char→Prompt</strong> if you need help.', target: '#promptInput' },
-            { title: '⚙️ Adjust Settings', body: 'In the left panel, you can choose your <strong>Model</strong>, set the <strong>Steps</strong>, <strong>CFG</strong>, <strong>Size</strong> and more. Keep defaults to start!', target: '#modalSettings' },
-            { title: '🚀 Generate!', body: 'Click the big <strong>Generate Image</strong> button. Your image will appear in the center. You can view past generations in the history strip below.', target: '#generateBtn' }
+            { title: 'Welcome to AbiArt!', body: 'This is your AI image studio. Let me show you how to use it in 5 quick steps.', target: null },
+            { title: ' Choose your Backend', body: 'Use the Modal button in the top bar. Modal gives you the best quality using a real GPU on the cloud.', target: '.backend-selector' },
+            { title: ' Write your Prompt', body: 'Describe what you want to generate in the <strong>Prompt</strong> box. More detail = better results! You can also use the <strong>Tools → Char→Prompt</strong> if you need help.', target: '#promptInput' },
+            { title: ' Adjust Settings', body: 'In the left panel, you can choose your <strong>Model</strong>, set the <strong>Steps</strong>, <strong>CFG</strong>, <strong>Size</strong> and more. Keep defaults to start!', target: '#modalSettings' },
+            { title: ' Generate!', body: 'Click the big <strong>Generate Image</strong> button. Your image will appear in the center. You can view past generations in the history strip below.', target: '#generateBtn' }
         ];
         let _tutStep = 0;
 
@@ -2416,13 +2490,28 @@
                 const p = JSON.parse(data.preset_json);
                 if (p.prompt) document.getElementById('promptInput').value = p.prompt;
                 if (p.negative) document.getElementById('negativePrompt').value = p.negative;
+                
+                // If the preset has a backend stored, switch to it (will trigger refreshModalModels if modal)
                 if (p.backend) setBackend(p.backend);
-                if (p.steps) { document.getElementById('modalSteps').value = p.steps; document.getElementById('modalStepsVal').value = p.steps; }
-                if (p.cfg_scale) { document.getElementById('modalCfgScale').value = p.cfg_scale; document.getElementById('modalCfgVal').value = p.cfg_scale; }
+
+                // Assuming Modal for community presets as the app mostly shares Modal configs
+                if (p.steps) uiSetSlider('modalSteps', 'modalStepsVal', p.steps);
+                if (p.cfg_scale) uiSetSlider('modalCfgScale', 'modalCfgVal', p.cfg_scale);
                 if (p.width) document.getElementById('modalWidth').value = p.width;
                 if (p.height) document.getElementById('modalHeight').value = p.height;
-                if (p.scheduler) document.getElementById('modalScheduler').value = p.scheduler;
-                if (p.model) document.getElementById('modalModel').value = p.model;
+                if (p.scheduler) uiSetSelect('modalScheduler', p.scheduler);
+                
+                if (p.model) {
+                    const sel = document.getElementById('modalModel');
+                    const stillLoading = sel && sel.options.length <= 1 && (sel.options[0]?.text === 'Loading...' || sel.options.length === 0);
+                    if (stillLoading) {
+                        window._pendingRecycleModel = p.model;
+                    } else {
+                        uiSetSelect('modalModel', p.model);
+                    }
+                }
+                
+                if (typeof autoSaveSettings === 'function') autoSaveSettings();
                 closeCommunity();
                 showToast('Preset loaded!', 'success');
             } catch (e) { showToast('Failed to load: ' + e.message); }
@@ -2483,7 +2572,7 @@
             btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sharing...';
             try {
                 const resp = await fetch('/api/community/share', {
-                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, image_thumb: thumbB64, preset_json: JSON.stringify(preset) })
                 });
                 const data = await resp.json();
