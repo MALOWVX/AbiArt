@@ -214,6 +214,10 @@ MODAL_DELETE_URL = os.environ.get(
     "MODAL_DELETE_URL",
     "https://YOUR_USERNAME--stable-diffusion-api-stablediffusion-delete-model-dev.modal.run"
 )
+MODAL_VERIFY_URL = os.environ.get(
+    "MODAL_VERIFY_URL",
+    "https://YOUR_USERNAME--stable-diffusion-api-stablediffusion-verify-models-dev.modal.run"
+)
 
 
 @app.route('/')
@@ -812,6 +816,18 @@ def delete_modal_file():
 
     except Exception as e:
         print(f"[Modal] Delete exception: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/modal/verify', methods=['GET'])
+def verify_modal_models():
+    """Check integrity of model files on Modal volume"""
+    try:
+        response = requests.get(MODAL_VERIFY_URL, timeout=30)
+        if response.status_code == 200:
+            return jsonify(response.json())
+        return jsonify({'error': f'Modal verify failed: {response.status_code}'}), 500
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
