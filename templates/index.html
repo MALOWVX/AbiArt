@@ -2162,28 +2162,129 @@
                     showToast('No metadata found in this image'); return;
                 }
                 _metadataParsed = null;
-                const paramText = meta['parameters'] || meta['prompt'] || meta['Comment'] || '';
                 document.getElementById('metadataRawText').textContent = JSON.stringify(meta, null, 2);
                 document.getElementById('metadataRaw').style.display = 'block';
                 document.getElementById('metadataResult').style.display = 'block';
-                if (paramText && !paramText.startsWith('{')) {
-                    const parsed = parseA1111Params(paramText);
-                    _metadataParsed = parsed;
-                    renderParsedMetadata(parsed);
-                } else if (paramText.startsWith('{')) {
-                    try {
-                        const j = JSON.parse(paramText);
-                        document.getElementById('metadataContent').innerHTML =
-                            '<p style="color:var(--muted);font-size:.75rem">ComfyUI workflow detected</p>' +
-                            '<pre style="font-size:.65rem;max-height:300px;overflow:auto;color:var(--text)">' + JSON.stringify(j, null, 2) + '</pre>';
-                    } catch { document.getElementById('metadataContent').innerHTML = '<p>Could not parse metadata</p>'; }
-                } else {
-                    document.getElementById('metadataContent').innerHTML = '<p style="color:var(--muted)">Unknown metadata format</p>';
+
+                // Try A1111 format first (plain text in 'parameters')
+                const a1111Text = meta['parameters'] || '';
+                if (a1111Text && !a1111Text.startsWith('{')) {
+                    _metadataParsed = parseA1111Params(a1111Text);
+                    renderParsedMetadata(_metadataParsed);
+                    showToast('A1111 metadata loaded!', 'success');
+                    return;
                 }
-                showToast('Metadata loaded!', 'success');
+
+                // Try ComfyUI format (JSON in 'prompt' or 'workflow')
+                const comfyJson = meta['prompt'] || meta['workflow'] || '';
+                if (comfyJson && comfyJson.trim().startsWith('{')) {
+                    try {
+                        const j = JSON.parse(comfyJson);
+                        _metadataParsed = parseComfyUI(j);
+                        renderParsedMetadata(_metadataParsed);
+                        showToast('ComfyUI metadata loaded!', 'success');
+                        return;
+                    } catch (err) { console.warn('ComfyUI parse error:', err); }
+                }
+
+                // Try Comment field (NovelAI / other)
+                const commentText = meta['Comment'] || '';
+                if (commentText) {
+                    if (commentText.startsWith('{')) {
+                        try {
+                            const j = JSON.parse(commentText);
+                            _metadataParsed = parseCommentJson(j);
+                            renderParsedMetadata(_metadataParsed);
+                            showToast('Metadata loaded!', 'success');
+                            return;
+                        } catch {}
+                    }
+                    // Fallback: try A1111 parse on Comment
+                    _metadataParsed = parseA1111Params(commentText);
+                    renderParsedMetadata(_metadataParsed);
+                    showToast('Metadata loaded!', 'success');
+                    return;
+                }
+
+                // Last resort: show raw data
+                document.getElementById('metadataContent').innerHTML =
+                    '<p style="color:var(--warning);font-size:.75rem">Could not auto-parse. Raw data shown below.</p>';
+                showToast('Metadata found but format unrecognized', 'warning');
             };
             reader.readAsArrayBuffer(file);
         }
+
+        // Parse ComfyUI workflow JSON → extract params from nodes
+        function parseComfyUI(workflow) {
+            const r = { prompt: '', negative: '', params: {} };
+            const nodes = Object.values(workflow);
+
+            for (const node of nodes) {
+                const cls = (node.class_type || '').toLowerCase();
+                const inp = node.inputs || {};
+
+                // KSampler / KSamplerAdvanced
+                if (cls.includes('ksampler')) {
+                    if (inp.cfg !== undefined) r.params['CFG scale'] = String(inp.cfg);
+                    if (inp.steps !== undefined) r.params['Steps'] = String(inp.steps);
+                    if (inp.sampler_name) r.params['Sampler'] = inp.sampler_name;
+                    if (inp.scheduler) r.params['Scheduler'] = inp.scheduler;
+                    if (inp.seed !== undefined) r.params['Seed'] = String(inp.seed);
+                    if (inp.denoise !== undefined) r.params['Denoising strength'] = String(inp.denoise);
+                }
+
+                // Checkpoint loader
+                if (cls.includes('checkpointloader') || cls.includes('checkpoint')) {
+                    if (inp.ckpt_name) r.params['Model'] = inp.ckpt_name;
+                }
+
+                // CLIP Text Encode (positive/negative)
+                if (cls.includes('cliptextencode') || cls === 'cliptextencode') {
+                    const txt = inp.text || '';
+                    if (txt) {
+                        // Heuristic: if we already have a prompt and this looks negative, use negative
+                        if (!r.prompt) r.prompt = txt;
+                        else if (!r.negative) r.negative = txt;
+                    }
+                }
+
+                // EmptyLatentImage for size
+                if (cls.includes('emptylatentimage')) {
+                    if (inp.width && inp.height) {
+                        r.params['Size'] = `${inp.width}x${inp.height}`;
+                    }
+                }
+
+                // VAE
+                if (cls.includes('vaeloader')) {
+                    if (inp.vae_name) r.params['VAE'] = inp.vae_name;
+                }
+
+                // Upscale
+                if (cls.includes('upscale')) {
+                    if (inp.upscale_method) r.params['Hires upscaler'] = inp.upscale_method;
+                    if (inp.scale_by) r.params['Hires upscale'] = String(inp.scale_by);
+                }
+            }
+
+            return r;
+        }
+
+        // Parse JSON Comment field (NovelAI etc.)
+        function parseCommentJson(j) {
+            const r = { prompt: '', negative: '', params: {} };
+            if (j.prompt) r.prompt = j.prompt;
+            if (j.uc) r.negative = j.uc;
+            if (j.negative_prompt) r.negative = j.negative_prompt;
+            if (j.steps) r.params['Steps'] = String(j.steps);
+            if (j.cfg_scale || j.cfg || j.scale) r.params['CFG scale'] = String(j.cfg_scale || j.cfg || j.scale);
+            if (j.sampler) r.params['Sampler'] = j.sampler;
+            if (j.seed) r.params['Seed'] = String(j.seed);
+            if (j.width && j.height) r.params['Size'] = `${j.width}x${j.height}`;
+            if (j.model) r.params['Model'] = j.model;
+            return r;
+        }
+
         function parsePNGChunks(buf) {
             const view = new DataView(buf);
             const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
@@ -2236,11 +2337,19 @@
             let h = '<div class="meta-grid">';
             h += `<div class="meta-field"><label>Prompt</label><div class="meta-val">${p.prompt || '—'}</div></div>`;
             h += `<div class="meta-field"><label>Negative</label><div class="meta-val">${p.negative || '—'}</div></div>`;
-            const paramKeys = ['Steps', 'Sampler', 'CFG scale', 'Seed', 'Size', 'Model', 'Model hash', 'Clip skip', 'VAE', 'Denoising strength', 'Hires upscaler', 'Hires upscale'];
+            const paramKeys = ['Steps', 'Sampler', 'Scheduler', 'CFG scale', 'Seed', 'Size', 'Model', 'Model hash', 'Clip skip', 'VAE', 'Denoising strength', 'Hires upscaler', 'Hires upscale'];
             const grid = paramKeys.filter(k => p.params[k]).map(k =>
                 `<div class="meta-param"><span class="meta-key">${k}</span><span class="meta-pval">${p.params[k]}</span></div>`
             ).join('');
             if (grid) h += `<div class="meta-params-grid">${grid}</div>`;
+            // Show any extra params not in the standard list
+            const extraKeys = Object.keys(p.params).filter(k => !paramKeys.includes(k));
+            if (extraKeys.length) {
+                const extraGrid = extraKeys.map(k =>
+                    `<div class="meta-param"><span class="meta-key">${k}</span><span class="meta-pval">${p.params[k]}</span></div>`
+                ).join('');
+                h += `<div class="meta-params-grid">${extraGrid}</div>`;
+            }
             h += '</div>';
             document.getElementById('metadataContent').innerHTML = h;
         }
@@ -2257,6 +2366,7 @@
             if (p.params['Steps']) uiSetSlider('modalSteps', 'modalStepsVal', p.params['Steps']);
             if (p.params['CFG scale']) uiSetSlider('modalCfgScale', 'modalCfgVal', p.params['CFG scale']);
             if (p.params['Sampler']) uiSetSelect('modalScheduler', p.params['Sampler']);
+            if (p.params['Scheduler']) uiSetSelect('modalScheduler', p.params['Scheduler']);
             if (p.params['Clip skip']) uiSetSlider('modalClipSkip', 'modalClipSkipVal', p.params['Clip skip']);
             if (p.params['Size']) {
                 const [w, h] = p.params['Size'].split('x');
