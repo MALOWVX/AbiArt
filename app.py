@@ -682,10 +682,23 @@ def generate_modal():
                 # Count actual images generated
                 actual_images = len(result.get('images', [result['image']]))
                 deduct_credits(user['id'], actual_images)
+                
+                # A1111 returns 'info' as a json-encoded string. Parse it so JS can read it.
+                info_parsed = {}
+                raw_info = result.get('info')
+                if isinstance(raw_info, str):
+                    try:
+                        info_parsed = json.loads(raw_info)
+                    except:
+                        pass
+                elif isinstance(raw_info, dict):
+                    info_parsed = raw_info
+
                 resp = {
                     'success': True,
                     'image': result['image'],
-                    'info': result.get('info', {})
+                    'info': info_parsed,
+                    'model': model  # Pass explicitly in case info doesn't have it
                 }
                 if 'images' in result:
                     resp['images'] = result['images']
