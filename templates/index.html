@@ -512,6 +512,20 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Scheduler</label>
+                                    <select id="modalNoiseScheduler">
+                                        <option value="Normal" selected>Normal</option>
+                                        <option value="Automatic">Automatic</option>
+                                        <option value="Karras">Karras</option>
+                                        <option value="Exponential">Exponential</option>
+                                        <option value="SGM Uniform">SGM Uniform</option>
+                                        <option value="Simple">Simple</option>
+                                    </select>
+                                </div>
+                                <div class="field"></div>
+                            </div>
                         </div>
                     </details>
 
@@ -1541,6 +1555,7 @@
                             model: document.getElementById('modalModel').value,
                             loras: activeModalLoras,
                             scheduler: document.getElementById('modalScheduler').value,
+                            noise_scheduler: document.getElementById('modalNoiseScheduler').value,
                             seed: parseInt(document.getElementById('modalSeed').value),
                             clip_skip: parseInt(document.getElementById('modalClipSkip').value),
                             vae: document.getElementById('modalVae').value,

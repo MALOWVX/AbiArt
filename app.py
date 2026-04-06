@@ -599,6 +599,7 @@ def generate_modal():
         model = data.get('model', 'SDXL Base 1.0')
         loras = data.get('loras', [])
         scheduler = data.get('scheduler', 'Euler')
+        noise_scheduler = data.get('noise_scheduler', 'Normal')
         try:
             seed = int(data.get('seed', -1))
         except (ValueError, TypeError):
@@ -648,6 +649,7 @@ def generate_modal():
             "model": model,
             "loras": loras,
             "scheduler": scheduler,
+            "noise_scheduler": noise_scheduler,
             "seed": seed,
             "clip_skip": clip_skip,
             "vae": vae,
