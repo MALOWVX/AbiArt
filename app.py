@@ -630,15 +630,19 @@ def generate_modal():
         if not prompt:
             return jsonify({'error': 'Please provide a prompt'}), 400
 
-        print(f"[Modal] Generating with model '{model}': {prompt[:50]}...")
-        print(f"[Modal] Scheduler: {scheduler}, Seed: {seed}, Clip skip: {clip_skip}")
+        print(f"[Flask DIAG] ==============================")
+        print(f"[Flask DIAG] model='{model}', scheduler='{scheduler}', noise_scheduler='{noise_scheduler}'")
+        print(f"[Flask DIAG] prompt='{prompt[:80]}...'")
+        print(f"[Flask DIAG] steps={steps}, cfg={cfg_scale}, size={width}x{height}, seed={seed}, clip_skip={clip_skip}")
+        print(f"[Flask DIAG] vae='{vae}', batch_count={batch_count}")
         if loras:
-            print(f"[Modal] LoRAs: {loras}")
+            print(f"[Flask DIAG] LoRAs: {loras}")
         if adetailer_enabled:
-            print(f"[Modal] ADetailer enabled")
+            print(f"[Flask DIAG] ADetailer: model={adetailer_model}, same_ckpt={adetailer_same_checkpoint}")
         if enable_hr:
-            print(f"[Modal] Hi-Res Fix: {hr_upscaler}, scale={hr_scale}, denoise={hr_denoising_strength}")
-        
+            print(f"[Flask DIAG] Hi-Res: {hr_upscaler}, scale={hr_scale}, denoise={hr_denoising_strength}")
+        print(f"[Flask DIAG] ==============================")
+
         payload = {
             "prompt": prompt,
             "negative_prompt": negative_prompt,
