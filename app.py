@@ -627,6 +627,9 @@ def generate_modal():
         hr_denoising_strength = data.get('hr_denoising_strength', 0.35)
         hr_second_pass_steps = data.get('hr_second_pass_steps', 15)
 
+        # NaN Fix
+        nan_fix_enabled = data.get('nan_fix_enabled', False)
+
         if not prompt:
             return jsonify({'error': 'Please provide a prompt'}), 400
 
@@ -671,6 +674,7 @@ def generate_modal():
             "hr_scale": hr_scale,
             "hr_denoising_strength": hr_denoising_strength,
             "hr_second_pass_steps": hr_second_pass_steps,
+            "nan_fix_enabled": nan_fix_enabled,
         }
 
         timeout = 300

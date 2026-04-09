@@ -641,6 +641,19 @@
                         </div>
                     </details>
 
+                    <!-- NaN Fix (Model Priming) -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-shield-halved"></i> NaN Fix</summary>
+                        <div class="sb-body">
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="modalNanFix"> Enable NaN Fix
+                            </label>
+                            <p style="font-size:.65rem;color:var(--text-muted,#888);margin:.3rem 0 0">
+                                Fixes corrupted/grid images on some models (e.g. NoobAI) by running a quick stabilization pass before each generation. Adds a few seconds of overhead.
+                            </p>
+                        </div>
+                    </details>
+
                     <!-- Hi-Res Fix -->
                     <details class="sb-section">
                         <summary><i class="fas fa-expand"></i> Hi-Res Fix</summary>
@@ -1572,7 +1585,8 @@
                             hr_upscaler: document.getElementById('modalHiresUpscaler').value,
                             hr_scale: parseFloat(document.getElementById('modalHiresScale').value),
                             hr_denoising_strength: parseFloat(document.getElementById('modalHiresDenoising').value),
-                            hr_second_pass_steps: parseInt(document.getElementById('modalHiresSteps').value)
+                            hr_second_pass_steps: parseInt(document.getElementById('modalHiresSteps').value),
+                            nan_fix_enabled: document.getElementById('modalNanFix').checked
                         })
                     });
                 } else {
