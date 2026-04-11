@@ -1227,17 +1227,21 @@ def chat_glm():
 
         # Build current user message with optional image
         if image_b64:
-            # Strip data URI prefix if present
+            # Detect MIME type from data URI, default to image/jpeg
+            mime_type = 'image/jpeg'
             b64_data = image_b64
-            if ',' in b64_data:
-                b64_data = b64_data.split(',', 1)[1]
-            # Vision format: content as array of parts
+            if image_b64.startswith('data:'):
+                header, b64_data = image_b64.split(',', 1)
+                # header is like "data:image/png;base64"
+                mime_type = header.split(':')[1].split(';')[0]
+            elif ',' in image_b64:
+                b64_data = image_b64.split(',', 1)[1]
+
             content_parts = []
-            if message:
-                content_parts.append({'type': 'text', 'text': message})
+            content_parts.append({'type': 'text', 'text': message if message else 'Describe this image and suggest relevant Stable Diffusion tags.'})
             content_parts.append({
                 'type': 'image_url',
-                'image_url': {'url': f'data:image/jpeg;base64,{b64_data}'}
+                'image_url': {'url': f'data:{mime_type};base64,{b64_data}'}
             })
             messages.append({'role': 'user', 'content': content_parts})
         else:
@@ -1257,8 +1261,10 @@ def chat_glm():
         resp = requests.post(api_endpoint, json=payload, headers=headers, timeout=60)
 
         if resp.status_code != 200:
-            print(f"[Chat] GLM error: {resp.status_code} {resp.text[:200]}")
-            return jsonify({'error': f'AI service error: {resp.status_code}'}), 500
+            error_detail = resp.text[:500] if resp.text else 'No detail'
+            print(f"[Chat] GLM error: {resp.status_code} — {error_detail}")
+            # Return the actual error message from the proxy for visibility
+            return jsonify({'error': f'AI error {resp.status_code}: {error_detail}'}), 500
 
         result = resp.json()
         content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
