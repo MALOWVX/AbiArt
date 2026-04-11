@@ -1183,10 +1183,8 @@ def handle_500(e):
     return jsonify({'error': 'Internal server error'}), 500
 
 # ===============================
-# AI CHAT (Gemini)
+# AI CHAT (GLM via reverse proxy)
 # ===============================
-
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 CHAT_SYSTEM_PROMPT = """You are AbiArt Assistant, a creative AI helper embedded in AbiArt — an AI image generation studio.
 
@@ -1205,14 +1203,9 @@ Rules:
 
 
 @app.route('/api/chat', methods=['POST'])
-def chat_gemini():
-    """Send a message to Gemini and return the response"""
-    if not GEMINI_API_KEY:
-        return jsonify({'error': 'AI Chat is not configured. Ask the admin to set GEMINI_API_KEY.'}), 503
-
+def chat_glm():
+    """Send a message to GLM via reverse proxy and return the response"""
     try:
-        import google.generativeai as genai
-
         data = request.json
         message = data.get('message', '').strip()
         image_b64 = data.get('image', None)
@@ -1221,40 +1214,65 @@ def chat_gemini():
         if not message and not image_b64:
             return jsonify({'error': 'Please provide a message or image'}), 400
 
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(
-            'gemini-2.0-flash',
-            system_instruction=CHAT_SYSTEM_PROMPT,
-        )
+        api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-9eb6.up.railway.app/V1/chat/completions')
+        glm_key = os.environ.get('GLM_API_KEY', '')
 
-        # Build conversation history for context
-        gemini_history = []
+        # Build messages array (OpenAI format)
+        messages = [{'role': 'system', 'content': CHAT_SYSTEM_PROMPT}]
+
+        # Add conversation history
         for msg in history[-20:]:
-            role = 'user' if msg.get('role') == 'user' else 'model'
-            gemini_history.append({'role': role, 'parts': [msg.get('text', '')]})
+            role = 'user' if msg.get('role') == 'user' else 'assistant'
+            messages.append({'role': role, 'content': msg.get('text', '')})
 
-        chat = model.start_chat(history=gemini_history)
-
-        # Build the current message parts
-        parts = []
+        # Build current user message with optional image
         if image_b64:
-            if ',' in image_b64:
-                image_b64 = image_b64.split(',', 1)[1]
-            import base64 as b64mod
-            image_bytes = b64mod.b64decode(image_b64)
-            parts.append({'mime_type': 'image/jpeg', 'data': image_bytes})
-        if message:
-            parts.append(message)
+            # Strip data URI prefix if present
+            b64_data = image_b64
+            if ',' in b64_data:
+                b64_data = b64_data.split(',', 1)[1]
+            # Vision format: content as array of parts
+            content_parts = []
+            if message:
+                content_parts.append({'type': 'text', 'text': message})
+            content_parts.append({
+                'type': 'image_url',
+                'image_url': {'url': f'data:image/jpeg;base64,{b64_data}'}
+            })
+            messages.append({'role': 'user', 'content': content_parts})
+        else:
+            messages.append({'role': 'user', 'content': message})
 
-        response = chat.send_message(parts)
-        return jsonify({'response': response.text})
+        headers = {'Content-Type': 'application/json'}
+        if glm_key:
+            headers['Authorization'] = f'Bearer {glm_key}'
 
+        payload = {
+            'model': 'glm-4v',
+            'messages': messages,
+            'temperature': 0.7,
+            'max_tokens': 1500
+        }
+
+        resp = requests.post(api_endpoint, json=payload, headers=headers, timeout=60)
+
+        if resp.status_code != 200:
+            print(f"[Chat] GLM error: {resp.status_code} {resp.text[:200]}")
+            return jsonify({'error': f'AI service error: {resp.status_code}'}), 500
+
+        result = resp.json()
+        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        if not content:
+            return jsonify({'error': 'No response from AI'}), 500
+
+        return jsonify({'response': content})
+
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'AI service timed out. Try again.'}), 504
     except Exception as e:
         log('ERROR', f'Chat error: {str(e)}')
-        error_msg = str(e)
-        if 'API_KEY' in error_msg.upper() or 'PERMISSION' in error_msg.upper():
-            return jsonify({'error': 'Invalid Gemini API key. Please check the configuration.'}), 401
-        return jsonify({'error': f'Chat error: {error_msg}'}), 500
+        return jsonify({'error': f'Chat error: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
