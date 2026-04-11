@@ -1289,7 +1289,7 @@ def chat_glm():
             headers['Authorization'] = f'Bearer {glm_key}'
 
         payload = {
-            'model': 'glm-4.7',
+            'model': 'glm-5',
             'messages': messages,
             'temperature': 0.7,
             'max_tokens': 1500
