@@ -1204,7 +1204,7 @@ Rules:
 
 @app.route('/api/chat', methods=['POST'])
 def chat_glm():
-    """Send a message to GLM via reverse proxy and return the response"""
+    """Chat with GLM proxy. Images are first analyzed by WD-Tagger for tag extraction."""
     try:
         data = request.json
         message = data.get('message', '').strip()
@@ -1217,6 +1217,54 @@ def chat_glm():
         api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-9eb6.up.railway.app/V1/chat/completions')
         glm_key = os.environ.get('GLM_API_KEY', '')
 
+        # If an image is provided, run it through WD-Tagger first to extract tags
+        image_context = ''
+        if image_b64:
+            try:
+                import tempfile
+                from gradio_client import Client, handle_file
+
+                b64_data = image_b64
+                if ',' in image_b64:
+                    b64_data = image_b64.split(',', 1)[1]
+                image_bytes = base64.b64decode(b64_data)
+
+                global _wd_tagger_client
+                if _wd_tagger_client is None:
+                    _wd_tagger_client = Client("SmilingWolf/wd-tagger")
+
+                tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+                tmp.write(image_bytes)
+                tmp.close()
+
+                result = _wd_tagger_client.predict(
+                    image=handle_file(tmp.name),
+                    model_repo="SmilingWolf/wd-swinv2-tagger-v3",
+                    general_thresh=0.35,
+                    general_mcut_enabled=False,
+                    character_thresh=0.85,
+                    character_mcut_enabled=False,
+                    api_name="/predict"
+                )
+                try:
+                    os.unlink(tmp.name)
+                except:
+                    pass
+
+                tags_string = ''
+                if isinstance(result, (list, tuple)) and len(result) > 0:
+                    tags_string = str(result[0]) if result[0] else ''
+                elif isinstance(result, str):
+                    tags_string = result
+
+                if tags_string:
+                    image_context = f"[Image analysis — detected tags: {tags_string}]\n"
+                    print(f"[Chat] Image analyzed: {len(tags_string)} chars of tags")
+
+            except Exception as tag_err:
+                print(f"[Chat] WD-Tagger failed: {tag_err}")
+                image_context = "[Image provided by user — tagger unavailable]\n"
+
         # Build messages array (OpenAI format)
         messages = [{'role': 'system', 'content': CHAT_SYSTEM_PROMPT}]
 
@@ -1225,34 +1273,23 @@ def chat_glm():
             role = 'user' if msg.get('role') == 'user' else 'assistant'
             messages.append({'role': role, 'content': msg.get('text', '')})
 
-        # Build current user message with optional image
-        if image_b64:
-            # Detect MIME type from data URI, default to image/jpeg
-            mime_type = 'image/jpeg'
-            b64_data = image_b64
-            if image_b64.startswith('data:'):
-                header, b64_data = image_b64.split(',', 1)
-                # header is like "data:image/png;base64"
-                mime_type = header.split(':')[1].split(';')[0]
-            elif ',' in image_b64:
-                b64_data = image_b64.split(',', 1)[1]
+        # Compose final user message
+        user_text = ''
+        if image_context:
+            user_text += image_context
+        if message:
+            user_text += message
+        elif image_context:
+            user_text += 'Describe the image based on those tags and suggest how to use them for image generation.'
 
-            content_parts = []
-            content_parts.append({'type': 'text', 'text': message if message else 'Describe this image and suggest relevant Stable Diffusion tags.'})
-            content_parts.append({
-                'type': 'image_url',
-                'image_url': {'url': f'data:{mime_type};base64,{b64_data}'}
-            })
-            messages.append({'role': 'user', 'content': content_parts})
-        else:
-            messages.append({'role': 'user', 'content': message})
+        messages.append({'role': 'user', 'content': user_text})
 
         headers = {'Content-Type': 'application/json'}
         if glm_key:
             headers['Authorization'] = f'Bearer {glm_key}'
 
         payload = {
-            'model': 'glm-5',
+            'model': 'glm-4.7',
             'messages': messages,
             'temperature': 0.7,
             'max_tokens': 1500
@@ -1263,7 +1300,6 @@ def chat_glm():
         if resp.status_code != 200:
             error_detail = resp.text[:500] if resp.text else 'No detail'
             print(f"[Chat] GLM error: {resp.status_code} — {error_detail}")
-            # Return the actual error message from the proxy for visibility
             return jsonify({'error': f'AI error {resp.status_code}: {error_detail}'}), 500
 
         result = resp.json()
