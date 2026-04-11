@@ -811,6 +811,47 @@
         </div>
     </div>
 
+    <!-- AI Chat -->
+    <div class="chat-backdrop" id="chatBackdrop" onclick="toggleChat()"></div>
+    <button class="chat-fab" id="chatFab" onclick="toggleChat()" title="AI Assistant">
+        <i class="fas fa-comment-dots"></i>
+    </button>
+    <div class="chat-drawer" id="chatDrawer">
+        <div class="chat-drawer-header">
+            <h3><i class="fas fa-robot"></i> AbiArt Assistant</h3>
+            <div style="display:flex;gap:.4rem">
+                <button class="chat-close" onclick="clearChat()" title="Clear chat"><i class="fas fa-trash"></i></button>
+                <button class="chat-close" onclick="toggleChat()" title="Close"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-welcome">
+                <i class="fas fa-wand-magic-sparkles"></i>
+                <p><strong>Hey! I'm your AbiArt Assistant.</strong></p>
+                <p>Ask me about prompts, tags, styles, or send me an image to analyze.</p>
+                <p class="hint">💡 Try: "What tags should I use for a cyberpunk girl?"</p>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <div class="chat-image-preview" id="chatImgPreview">
+                <img id="chatImgPreviewImg" src="" alt="preview">
+                <button class="remove-img" onclick="removeChatImage()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="chat-input-row">
+                <button class="chat-btn-attach" onclick="document.getElementById('chatFileInput').click()" title="Attach image">
+                    <i class="fas fa-image"></i>
+                </button>
+                <textarea id="chatInput" placeholder="Ask anything about image generation..." rows="1"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"
+                    oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+                <button class="chat-btn-send" id="chatSendBtn" onclick="sendChat()" title="Send">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+        <input type="file" id="chatFileInput" accept="image/*" style="display:none" onchange="handleChatImage(this)">
+    </div>
+
     <script>
         // ========== STATE ==========
         let currentBackend = 'huggingface';
@@ -2739,6 +2780,160 @@
                 };
                 img.src = `data:image/png;base64,${b64}`;
             });
+        }
+        // ==========================================
+        // AI CHAT
+        // ==========================================
+        let chatHistory = [];
+        let chatImageBase64 = null;
+
+        function toggleChat() {
+            const drawer = document.getElementById('chatDrawer');
+            const backdrop = document.getElementById('chatBackdrop');
+            if(drawer.classList.contains('open')) {
+                drawer.classList.remove('open');
+                backdrop.classList.remove('open');
+            } else {
+                drawer.classList.add('open');
+                backdrop.classList.add('open');
+                document.getElementById('chatInput').focus();
+            }
+        }
+
+        function clearChat() {
+            if(!confirm("Clear chat history?")) return;
+            chatHistory = [];
+            const msgs = document.getElementById('chatMessages');
+            msgs.innerHTML = `
+            <div class="chat-welcome">
+                <i class="fas fa-wand-magic-sparkles"></i>
+                <p><strong>Hey! I'm your AbiArt Assistant.</strong></p>
+                <p>Ask me about prompts, tags, styles, or send me an image to analyze.</p>
+                <p class="hint">💡 Try: "What tags should I use for a cyberpunk girl?"</p>
+            </div>`;
+            removeChatImage();
+        }
+
+        function handleChatImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                chatImageBase64 = e.target.result;
+                const previewImg = document.getElementById('chatImgPreviewImg');
+                previewImg.src = chatImageBase64;
+                document.getElementById('chatImgPreview').style.display = 'block';
+                input.value = ''; // reset
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeChatImage() {
+            chatImageBase64 = null;
+            document.getElementById('chatImgPreview').style.display = 'none';
+        }
+
+        function formatMarkdown(text) {
+            let html = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+            
+            // Basic lists
+            html = html.replace(/<br>- (.*?)(?=<br>|$)/g, '<br>&#8226; $1');
+            html = html.replace(/<br>\* (.*?)(?=<br>|$)/g, '<br>&#8226; $1');
+            return `<p>${html}</p>`;
+        }
+
+        async function sendChat() {
+            const inputEl = document.getElementById('chatInput');
+            const btnSend = document.getElementById('chatSendBtn');
+            const text = inputEl.value.trim();
+            
+            if (!text && !chatImageBase64) return;
+            
+            const msgsContainer = document.getElementById('chatMessages');
+            
+            const welcome = msgsContainer.querySelector('.chat-welcome');
+            if (welcome) welcome.remove();
+
+            let imgHtml = chatImageBase64 ? `<img src="${chatImageBase64}">` : '';
+            const textHtml = text ? formatMarkdown(text) : '';
+            msgsContainer.insertAdjacentHTML('beforeend', `
+                <div class="chat-msg user">
+                    <div class="chat-msg-label">You</div>
+                    <div class="chat-bubble">${imgHtml}${textHtml}</div>
+                </div>
+            `);
+            
+            msgsContainer.scrollTop = msgsContainer.scrollHeight;
+
+            const payload = {
+                message: text,
+                image: chatImageBase64,
+                history: chatHistory.length ? chatHistory : []
+            };
+
+            chatHistory.push({ role: 'user', text: text });
+
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
+            removeChatImage();
+
+            const typingId = 'typing-' + Date.now();
+            msgsContainer.insertAdjacentHTML('beforeend', `
+                <div class="chat-msg ai" id="${typingId}">
+                    <div class="chat-msg-label">AbiArt AI</div>
+                    <div class="chat-bubble chat-typing">
+                        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                    </div>
+                </div>
+            `);
+            msgsContainer.scrollTop = msgsContainer.scrollHeight;
+
+            btnSend.disabled = true;
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAuthToken() },
+                    body: JSON.stringify(payload)
+                });
+                
+                const el = document.getElementById(typingId);
+                if(el) el.remove();
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Chat failed');
+                
+                const replyText = data.response || "No response";
+                
+                msgsContainer.insertAdjacentHTML('beforeend', `
+                    <div class="chat-msg ai">
+                        <div class="chat-msg-label">AbiArt AI</div>
+                        <div class="chat-bubble">${formatMarkdown(replyText)}</div>
+                    </div>
+                `);
+                
+                chatHistory.push({ role: 'model', text: replyText });
+                
+            } catch(e) {
+                const el = document.getElementById(typingId);
+                if(el) el.remove();
+                msgsContainer.insertAdjacentHTML('beforeend', `
+                    <div class="chat-msg ai">
+                        <div class="chat-msg-label">System</div>
+                        <div class="chat-bubble" style="color:var(--error)">Error: ${e.message}</div>
+                    </div>
+                `);
+                chatHistory.pop();
+            } finally {
+                btnSend.disabled = false;
+                msgsContainer.scrollTop = msgsContainer.scrollHeight;
+                inputEl.focus();
+            }
         }
 
         // Init tools drop zones

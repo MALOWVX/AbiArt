@@ -1182,6 +1182,80 @@ def handle_500(e):
     log('ERROR', f'500 Internal server error: {request.path}', str(e))
     return jsonify({'error': 'Internal server error'}), 500
 
+# ===============================
+# AI CHAT (Gemini)
+# ===============================
+
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+CHAT_SYSTEM_PROMPT = """You are AbiArt Assistant, a creative AI helper embedded in AbiArt — an AI image generation studio.
+
+Your expertise:
+- **Tag/prompt crafting**: You know Stable Diffusion, NovelAI, and Danbooru tag syntax. You can suggest optimal prompts, negative prompts, and tag combinations for anime/illustration generation.
+- **Visual identification**: When shown an image, you can identify clothing, accessories, poses, art styles, color palettes, and suggest matching Danbooru/SD tags.
+- **Parameter guidance**: You understand CFG scale, samplers (Euler, DPM++), schedulers, steps, clip skip, Hi-Res Fix, ADetailer, LoRAs — and can advise on optimal settings.
+- **Model knowledge**: You know about SDXL, NoobAI, NTRMIX, and similar anime checkpoints.
+
+Rules:
+- Be concise but helpful. Use bullet points and code blocks for tags.
+- When suggesting tags, format them as comma-separated lists ready to copy-paste.
+- Answer in the same language the user writes in (French, English, etc).
+- If asked about something outside your expertise, briefly answer but steer back to image generation topics.
+- Use markdown formatting for readability."""
+
+
+@app.route('/api/chat', methods=['POST'])
+def chat_gemini():
+    """Send a message to Gemini and return the response"""
+    if not GEMINI_API_KEY:
+        return jsonify({'error': 'AI Chat is not configured. Ask the admin to set GEMINI_API_KEY.'}), 503
+
+    try:
+        import google.generativeai as genai
+
+        data = request.json
+        message = data.get('message', '').strip()
+        image_b64 = data.get('image', None)
+        history = data.get('history', [])
+
+        if not message and not image_b64:
+            return jsonify({'error': 'Please provide a message or image'}), 400
+
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(
+            'gemini-2.0-flash',
+            system_instruction=CHAT_SYSTEM_PROMPT,
+        )
+
+        # Build conversation history for context
+        gemini_history = []
+        for msg in history[-20:]:
+            role = 'user' if msg.get('role') == 'user' else 'model'
+            gemini_history.append({'role': role, 'parts': [msg.get('text', '')]})
+
+        chat = model.start_chat(history=gemini_history)
+
+        # Build the current message parts
+        parts = []
+        if image_b64:
+            if ',' in image_b64:
+                image_b64 = image_b64.split(',', 1)[1]
+            import base64 as b64mod
+            image_bytes = b64mod.b64decode(image_b64)
+            parts.append({'mime_type': 'image/jpeg', 'data': image_bytes})
+        if message:
+            parts.append(message)
+
+        response = chat.send_message(parts)
+        return jsonify({'response': response.text})
+
+    except Exception as e:
+        log('ERROR', f'Chat error: {str(e)}')
+        error_msg = str(e)
+        if 'API_KEY' in error_msg.upper() or 'PERMISSION' in error_msg.upper():
+            return jsonify({'error': 'Invalid Gemini API key. Please check the configuration.'}), 401
+        return jsonify({'error': f'Chat error: {error_msg}'}), 500
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('FLASK_PORT', 5000))
