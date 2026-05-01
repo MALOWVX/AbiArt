@@ -2420,9 +2420,70 @@
                 ).join('');
                 h += `<div class="meta-params-grid">${extraGrid}</div>`;
             }
+            // Civitai download button placeholder (filled async)
+            h += `<div id="metaCivitaiAction" style="margin-top:.5rem"></div>`;
             h += '</div>';
             document.getElementById('metadataContent').innerHTML = h;
+
+            // Async lookup on Civitai by model hash
+            const hash = p.params['Model hash'];
+            if (hash) {
+                lookupCivitaiByHash(hash, p.params['Model'] || '');
+            }
         }
+
+        async function lookupCivitaiByHash(hash, modelName) {
+            const el = document.getElementById('metaCivitaiAction');
+            if (!el) return;
+            el.innerHTML = `<span style="font-size:.65rem;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> Looking up model on Civitai...</span>`;
+            try {
+                const resp = await fetch(`https://civitai.com/api/v1/model-versions/by-hash/${hash}`);
+                if (!resp.ok) throw new Error('not found');
+                const data = await resp.json();
+                const modelId = data.modelId;
+                const versionId = data.id;
+                const name = data.model?.name || modelName || 'Model';
+                const type = data.model?.type || 'Checkpoint';
+                const isLora = type === 'LORA' || type === 'LoCon';
+                const filename = (data.files || [])[0]?.name || '';
+                const civitaiUrl = `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`;
+
+                el.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:var(--bg2);border:1px solid var(--accent);margin-top:.25rem">
+                        <i class="fas fa-fire" style="color:var(--accent);font-size:.75rem"></i>
+                        <span style="font-size:.7rem;flex:1;color:var(--text)">Found on Civitai: <strong>${name}</strong></span>
+                        <a href="${civitaiUrl}" target="_blank" class="btn btn-sm" style="padding:.2rem .5rem;font-size:.65rem" title="View on Civitai">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                        <button class="btn-accent" style="padding:.2rem .6rem;font-size:.65rem" onclick="metaDownloadFromCivitai('${civitaiUrl}','${filename}',${isLora})">
+                            <i class="fas fa-download"></i> Download
+                        </button>
+                    </div>`;
+            } catch (e) {
+                el.innerHTML = `<span style="font-size:.65rem;color:var(--muted)"><i class="fas fa-question-circle"></i> Model not found on Civitai (hash: ${hash})</span>`;
+            }
+        }
+
+        function metaDownloadFromCivitai(url, filename, isLora) {
+            // Switch to modal backend, show civitai browser, fill in URL and trigger download
+            setBackend('modal');
+            // Pre-fill the civitai URL field
+            const urlEl = document.getElementById('civitaiUrl');
+            const fileEl = document.getElementById('civitaiFilename');
+            const loraEl = document.getElementById('civitaiIsLora');
+            if (urlEl) urlEl.value = url;
+            if (fileEl && filename) fileEl.value = filename;
+            if (loraEl) loraEl.checked = isLora;
+            closeTools();
+            // Open the civitai browser panel
+            const browser = document.getElementById('civitaiBrowser');
+            if (browser) {
+                browser.style.display = '';
+                browser.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            showToast('URL pré-remplie — clique Download pour lancer !', 'success');
+        }
+
         function loadMetadataSettings() {
             if (!_metadataParsed) { showToast('No parsed settings to load'); return; }
             const p = _metadataParsed;
