@@ -923,7 +923,7 @@ def tool_char_to_prompt():
     if not description:
         return jsonify({'error': 'No description provided'}), 400
 
-    api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-9eb6.up.railway.app/V1/chat/completions')
+    api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-f470.up.railway.app/V1/chat/completions')
     glm_key = os.environ.get('GLM_API_KEY', '')
 
     style_hints = {
@@ -1214,7 +1214,7 @@ def chat_glm():
         if not message and not image_b64:
             return jsonify({'error': 'Please provide a message or image'}), 400
 
-        api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-9eb6.up.railway.app/V1/chat/completions')
+        api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-f470.up.railway.app/V1/chat/completions')
         glm_key = os.environ.get('GLM_API_KEY', '')
 
         # If an image is provided, run it through WD-Tagger first to extract tags
