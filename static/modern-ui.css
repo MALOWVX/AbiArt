@@ -1,0 +1,391 @@
+/* ============================================================
+   AbiArt — MODERN UI REFRESH (override layer)
+   Load this file AFTER style.css in index.html:
+   <link href="/static/style.css" rel="stylesheet">
+   <link href="/static/modern-ui.css" rel="stylesheet">
+   ============================================================ */
+:root {
+    --bg: #0b0b10;
+    --bg2: #14141c;
+    --bg3: #20202c;
+    --surface: #14141c;
+    --card: #181822;
+    --text: #f4f4f6;
+    --muted: rgba(244, 244, 246, .6);
+    --dim: rgba(244, 244, 246, .24);
+    --border: rgba(255, 255, 255, .08);
+    --border-strong: rgba(255, 255, 255, .18);
+    --accent: #8b5cf6;
+    --accent2: #c4b5fd;
+    --success: #34d399;
+    --error: #f87171;
+    --warn: #fbbf24;
+    --glow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+    --glow-strong: 0 12px 40px rgba(0, 0, 0, .55), 0 0 0 1px var(--border-strong);
+    --glow-accent: 0 0 0 1px rgba(139, 92, 246, .5), 0 6px 24px rgba(139, 92, 246, .3);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-lg: 18px;
+    --ease: cubic-bezier(.4, 0, .2, 1);
+}
+
+body {
+    background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(139, 92, 246, .08), transparent 60%),
+        radial-gradient(900px 500px at -10% 110%, rgba(236, 72, 153, .06), transparent 55%),
+        var(--bg);
+}
+
+/* --- Header: glassmorphism --- */
+.header {
+    background: rgba(20, 20, 28, .7);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .03);
+}
+
+.logo-icon {
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(139, 92, 246, .35);
+}
+
+/* --- Backend toggle / status --- */
+.backend-toggle {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.backend-btn {
+    border-right: 1px solid var(--border);
+    transition: .2s var(--ease);
+}
+
+.backend-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.backend-btn:hover:not(.active) {
+    background: var(--bg3);
+    color: var(--text);
+}
+
+.status-badge {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg2);
+}
+
+/* --- Sidebar sections --- */
+.sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+    box-shadow: none;
+}
+
+.sb-section {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    overflow: hidden;
+    transition: border-color .25s var(--ease), box-shadow .25s var(--ease);
+}
+
+.sb-section[open] {
+    border-color: var(--border-strong);
+    box-shadow: var(--glow);
+}
+
+.sb-section summary:hover {
+    background: var(--bg3);
+    color: var(--text);
+}
+
+.sidebar-footer {
+    border-top: 1px solid var(--border);
+    background: rgba(11, 11, 16, .6);
+    backdrop-filter: blur(8px);
+}
+
+/* --- Inputs --- */
+select,
+input[type="text"],
+input[type="url"],
+input[type="number"],
+textarea {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg2);
+    transition: .2s var(--ease);
+}
+
+select:hover,
+input[type="text"]:hover,
+input[type="url"]:hover,
+input[type="number"]:hover,
+textarea:hover {
+    background: var(--bg2);
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+
+select:focus,
+input[type="text"]:focus,
+input[type="url"]:focus,
+input[type="number"]:focus,
+textarea:focus {
+    background: var(--bg2);
+    color: var(--text);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, .18);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    background: var(--accent2);
+}
+
+/* --- Buttons --- */
+.btn {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    transition: .2s var(--ease);
+}
+
+.btn:hover {
+    background: var(--bg2);
+    color: var(--text);
+    border-color: var(--border-strong);
+    box-shadow: var(--glow);
+    transform: translateY(-1px);
+}
+
+.btn-accent {
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 16px rgba(139, 92, 246, .3);
+    transition: .2s var(--ease);
+}
+
+.btn-accent:hover {
+    box-shadow: 0 6px 24px rgba(139, 92, 246, .45);
+    transform: translateY(-1px);
+}
+
+.btn-sm {
+    border-radius: 6px;
+}
+
+.preset-btn,
+.quick-prompt {
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    transition: .2s var(--ease);
+}
+
+.preset-btn:hover,
+.quick-prompt:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* --- Canvas / generated image --- */
+.canvas-main {
+    background: radial-gradient(800px 500px at 50% 30%, rgba(139, 92, 246, .05), transparent 70%);
+}
+
+.generated-image {
+    border-radius: var(--radius);
+    box-shadow: var(--glow-strong);
+}
+
+.action-btn {
+    background: rgba(0, 0, 0, .55);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(6px);
+    transition: .2s var(--ease);
+}
+
+.action-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.gen-info-bar {
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+}
+
+/* --- History strip: color thumbnails (no more grayscale) --- */
+.history-strip {
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+}
+
+.history-strip img {
+    filter: none;
+    border-radius: var(--radius-sm);
+    border: 2px solid transparent;
+    transition: .25s var(--ease);
+}
+
+.history-strip img:hover {
+    filter: none;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--glow);
+}
+
+/* --- Civitai model cards: color images --- */
+.model-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    transition: .25s var(--ease);
+}
+
+.model-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--glow);
+    transform: translateY(-2px);
+}
+
+.model-card img {
+    filter: none;
+    transition: .3s var(--ease);
+}
+
+.model-card:hover img {
+    filter: none;
+    transform: scale(1.05);
+}
+
+/* --- Modals / tools / auth / community: rounded + soft --- */
+.modal,
+.tools-container,
+.auth-box {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glow-strong);
+}
+
+.modal-btn {
+    border-radius: var(--radius-sm);
+}
+
+.modal-overlay,
+.tools-overlay,
+.auth-overlay {
+    backdrop-filter: blur(10px);
+}
+
+.tools-btn {
+    border-radius: var(--radius-sm);
+    transition: .2s var(--ease);
+}
+
+.tool-drop-zone {
+    border-radius: var(--radius);
+    border: 2px dashed var(--border-strong);
+}
+
+.com-card {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.com-card:hover {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+}
+
+.tag-chip,
+.wt-chip {
+    border-radius: 999px;
+    border: 1px solid var(--border);
+}
+
+/* --- Auth fields --- */
+.auth-field input {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg2);
+}
+
+.auth-field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, .18);
+}
+
+.auth-submit {
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 16px rgba(139, 92, 246, .3);
+}
+
+.auth-tabs {
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+/* --- Chat --- */
+.chat-fab {
+    border-radius: 50%;
+    box-shadow: 0 6px 24px rgba(139, 92, 246, .45);
+}
+
+.chat-drawer {
+    border-left: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.chat-msg.ai .chat-bubble {
+    border-radius: 14px 14px 14px 4px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+}
+
+.chat-msg.user .chat-bubble {
+    border-radius: 14px 14px 4px 14px;
+}
+
+.chat-btn-send {
+    border-radius: var(--radius-sm);
+}
+
+.chat-btn-attach {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.chat-input-row textarea {
+    border-radius: var(--radius-sm);
+}
+
+/* --- Toast --- */
+.toast {
+    border-radius: var(--radius-sm);
+    box-shadow: var(--glow-strong);
+}
+
+/* --- LoRA / folders --- */
+.lora-item {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.lora-folder {
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}

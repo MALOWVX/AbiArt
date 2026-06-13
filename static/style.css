@@ -1,19 +1,28 @@
 /* AbiArt Design System — bobo.html inspired */
 :root {
-    --bg: #101010;
-    --bg2: #1a1a1a;
-    --bg3: #2f2f2f;
-    --text: #efefef;
-    --muted: #efefef80;
-    --dim: #efefef40;
+    --bg: #0b0b10;
+    --bg2: #14141c;
+    --surface: #14141c;
+    --card: #181822;
+    --bg3: #20202c;
+    --text: #f4f4f6;
+    --muted: #f4f4f699;
+    --dim: #f4f4f63d;
+    --border: rgba(255, 255, 255, .08);
+    --border-strong: rgba(255, 255, 255, .18);
     --accent: #8b5cf6;
-    --accent2: #a78bfa;
-    --success: #10b981;
-    --error: #ef4444;
-    --warn: #f59e0b;
-    --glow: 0 0 2px #fff, 0 0 8px #d8d6d680;
-    --glow-strong: 0 0 4px #fff, 0 0 12px #d8d6d6, 0 0 12px #b4b4b4;
-    --sidebar-w: 310px;
+    --accent2: #c4b5fd;
+    --success: #34d399;
+    --error: #f87171;
+    --warn: #fbbf24;
+    --glow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
+    --glow-strong: 0 12px 40px rgba(0, 0, 0, .55), 0 0 0 1px var(--border-strong);
+    --glow-accent: 0 0 0 1px rgba(139, 92, 246, .5), 0 6px 24px rgba(139, 92, 246, .3);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-lg: 18px;
+    --ease: cubic-bezier(.4, 0, .2, 1);
+    --sidebar-w: 320px;
 }
 
 *,
