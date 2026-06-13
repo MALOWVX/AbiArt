@@ -350,7 +350,7 @@ class StableDiffusion:
             hires_denoising = float(data.get("hr_denoising_strength", 0.35))
             hires_steps = int(data.get("hr_second_pass_steps", 15))
 
-            # ADetailer params
+            # ADetailer params (1st pass)
             adetailer_enabled = data.get("adetailer_enabled", False)
             adetailer_model = data.get("adetailer_model", "face_yolov8n.pt")
             adetailer_confidence = float(data.get("adetailer_confidence", 0.3))
@@ -358,6 +358,15 @@ class StableDiffusion:
             adetailer_negative = data.get("adetailer_negative", "")
             adetailer_strength = float(data.get("adetailer_strength", 0.4))
             adetailer_steps = int(data.get("adetailer_steps", 25))
+
+            # ADetailer params (2nd pass) - e.g. hands or full person
+            adetailer2_enabled = data.get("adetailer2_enabled", False)
+            adetailer2_model = data.get("adetailer2_model", "hand_yolov8n.pt")
+            adetailer2_confidence = float(data.get("adetailer2_confidence", 0.3))
+            adetailer2_prompt = data.get("adetailer2_prompt", "")
+            adetailer2_negative = data.get("adetailer2_negative", "")
+            adetailer2_strength = float(data.get("adetailer2_strength", 0.4))
+            adetailer2_steps = int(data.get("adetailer2_steps", 25))
 
             if not prompt:
                 return {"error": "No prompt provided"}
@@ -422,23 +431,36 @@ class StableDiffusion:
                 payload["denoising_strength"] = hires_denoising
                 payload["hr_second_pass_steps"] = hires_steps
 
-            # Add ADetailer if enabled
-            if adetailer_enabled:
+            # Add ADetailer if enabled. ADetailer accepts multiple detection
+            # tabs: each extra dict in `args` is an additional pass.
+            if adetailer_enabled or adetailer2_enabled:
+                ad_args = [
+                    True,   # ad_enable
+                    False,  # skip_img2img
+                ]
+                if adetailer_enabled:
+                    ad_args.append({
+                        "ad_model": adetailer_model,
+                        "ad_confidence": adetailer_confidence,
+                        "ad_prompt": adetailer_prompt or "",
+                        "ad_negative_prompt": adetailer_negative or "",
+                        "ad_denoising_strength": adetailer_strength,
+                        "ad_steps": adetailer_steps,
+                        "ad_cfg_scale": cfg,
+                    })
+                if adetailer2_enabled:
+                    ad_args.append({
+                        "ad_model": adetailer2_model,
+                        "ad_confidence": adetailer2_confidence,
+                        "ad_prompt": adetailer2_prompt or "",
+                        "ad_negative_prompt": adetailer2_negative or "",
+                        "ad_denoising_strength": adetailer2_strength,
+                        "ad_steps": adetailer2_steps,
+                        "ad_cfg_scale": cfg,
+                    })
                 payload["alwayson_scripts"] = {
                     "ADetailer": {
-                        "args": [
-                            True,   # ad_enable
-                            False,  # skip_img2img
-                            {
-                                "ad_model": adetailer_model,
-                                "ad_confidence": adetailer_confidence,
-                                "ad_prompt": adetailer_prompt or "",
-                                "ad_negative_prompt": adetailer_negative or "",
-                                "ad_denoising_strength": adetailer_strength,
-                                "ad_steps": adetailer_steps,
-                                "ad_cfg_scale": cfg,
-                            }
-                        ]
+                        "args": ad_args
                     }
                 }
 
@@ -448,7 +470,9 @@ class StableDiffusion:
             if lora_tags:
                 print(f"  LoRAs: {lora_tags}")
             if adetailer_enabled:
-                print(f"  ADetailer: ON (model={adetailer_model}, confidence={adetailer_confidence}, strength={adetailer_strength}, steps={adetailer_steps})")
+                print(f"  ADetailer #1: ON (model={adetailer_model}, confidence={adetailer_confidence}, strength={adetailer_strength}, steps={adetailer_steps})")
+            if adetailer2_enabled:
+                print(f"  ADetailer #2: ON (model={adetailer2_model}, confidence={adetailer2_confidence}, strength={adetailer2_strength}, steps={adetailer2_steps})")
             if hires_enabled:
                 print(f"  Hi-Res Fix: ON ({hires_upscaler}, scale={hires_scale}, denoise={hires_denoising}, steps={hires_steps})")
 
