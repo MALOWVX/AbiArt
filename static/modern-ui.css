@@ -142,8 +142,23 @@ a:hover {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--card);
-    overflow: hidden;
+    /* overflow:hidden + transition laissait le <details> clippé à ~0px
+       après fermeture (réparé uniquement par le reflow d'une autre
+       section). On passe en visible et on arrondit le summary lui-même. */
+    overflow: visible;
     transition: border-color .25s var(--ease), box-shadow .25s var(--ease);
+}
+
+.sb-section > summary {
+    min-height: 2.2rem;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    border-radius: var(--radius);
+}
+
+.sb-section[open] > summary {
+    border-radius: var(--radius) var(--radius) 0 0;
 }
 
 .sb-section[open] {
