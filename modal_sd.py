@@ -185,6 +185,80 @@ class StableDiffusion:
 
         print("WARNING: A1111 did not start within 180 seconds!")
 
+    def _extract_checkpoint_name(self, model_title: str) -> str:
+        """Convert A1111 model title into a checkpoint filename when possible."""
+        if not model_title:
+            return ""
+        if "[" in model_title:
+            model_title = model_title.split("[", 1)[0].strip()
+        return model_title
+
+    def _is_probably_vpred_checkpoint(self, model_name: str) -> bool:
+        """Best-effort classifier for v-pred checkpoints based on naming."""
+        normalized = (model_name or "").lower()
+        hints = ("vpred", "v_pred", "v-pred", "v prediction", "noobai")
+        return any(hint in normalized for hint in hints)
+
+    def _find_checkpoint_file(self, model_name: str):
+        """Find checkpoint path in CHECKPOINT_DIR from model title/name."""
+        import os
+        from pathlib import Path
+
+        if not model_name:
+            return None
+
+        base_name = self._extract_checkpoint_name(model_name)
+        candidate = Path(CHECKPOINT_DIR) / base_name
+        if candidate.exists():
+            return candidate
+
+        if not os.path.exists(CHECKPOINT_DIR):
+            return None
+
+        target_root = Path(base_name).stem.lower()
+        for file_name in os.listdir(CHECKPOINT_DIR):
+            if not file_name.endswith((".safetensors", ".ckpt")):
+                continue
+            stem = Path(file_name).stem.lower()
+            if stem == target_root or file_name.lower() == base_name.lower():
+                return Path(CHECKPOINT_DIR) / file_name
+        return None
+
+    def _ensure_vpred_yaml(self, model_name: str) -> bool:
+        """Create <checkpoint>.yaml from sd_xl_v.yaml when a likely v-pred model is used."""
+        import shutil
+        from pathlib import Path
+
+        if not self._is_probably_vpred_checkpoint(model_name):
+            return False
+
+        checkpoint_path = self._find_checkpoint_file(model_name)
+        if checkpoint_path is None:
+            print(f"[v-pred] Could not resolve checkpoint path for model: {model_name}")
+            return False
+
+        yaml_target = checkpoint_path.with_suffix(".yaml")
+        if yaml_target.exists():
+            return False
+
+        template = Path(A1111_DIR) / "configs" / "sd_xl_v.yaml"
+        if not template.exists():
+            print(f"[v-pred] Missing template config: {template}")
+            return False
+
+        shutil.copyfile(template, yaml_target)
+        print(f"[v-pred] Created config: {yaml_target.name}")
+        return True
+
+    def _post_txt2img(self, payload: dict, timeout: int):
+        import requests
+        return requests.post(f"{self.a1111_url}/sdapi/v1/txt2img", json=payload, timeout=timeout)
+
+    def _is_nan_failure(self, response_text: str) -> bool:
+        text = (response_text or "").lower()
+        nan_markers = ("nansexception", "nan", "inf", "black image")
+        return any(marker in text for marker in nan_markers)
+
     @modal.web_endpoint(method="GET")
     def health(self):
         """Health check endpoint"""
@@ -315,6 +389,16 @@ class StableDiffusion:
             if clip_skip > 1:
                 override_settings["CLIP_stop_at_last_layers"] = clip_skip
 
+            # Ensure v-pred checkpoints have an adjacent yaml config when needed
+            # (prevents common "fried/noise" outputs on some SDXL v-pred models).
+            created_yaml = self._ensure_vpred_yaml(model)
+            if created_yaml:
+                try:
+                    requests.post(f"{self.a1111_url}/sdapi/v1/refresh-checkpoints", timeout=20)
+                    print("[v-pred] Refreshed checkpoints after yaml provisioning")
+                except Exception as refresh_err:
+                    print(f"[v-pred] Could not refresh checkpoints: {refresh_err}")
+
             # Build txt2img payload
             payload = {
                 "prompt": full_prompt,
@@ -370,11 +454,34 @@ class StableDiffusion:
 
             # Call A1111's txt2img API (longer timeout for hi-res)
             gen_timeout = 600 if hires_enabled else 300
-            r = requests.post(
-                f"{self.a1111_url}/sdapi/v1/txt2img",
-                json=payload,
-                timeout=gen_timeout,
-            )
+            r = self._post_txt2img(payload, timeout=gen_timeout)
+
+            # Automatic recovery for NaN/fried generations:
+            # retry with a safer profile (Euler, lower CFG, no LoRA, no hi-res).
+            if r.status_code != 200 and self._is_nan_failure(r.text):
+                print("[safe-mode] NaN/Inf-like failure detected. Retrying with safe settings...")
+                safe_override = dict(override_settings)
+                if "xl" in (model or "").lower() and not safe_override.get("sd_vae"):
+                    safe_override["sd_vae"] = "sdxl_vae.safetensors"
+
+                safe_payload = {
+                    "prompt": prompt,  # disable LoRA tags for retry
+                    "negative_prompt": negative_prompt,
+                    "sampler_name": "Euler",
+                    "steps": min(steps, 30),
+                    "cfg_scale": min(cfg, 4.5),
+                    "width": width,
+                    "height": height,
+                    "seed": seed,
+                    "n_iter": batch_count,
+                    "override_settings": safe_override,
+                    "override_settings_restore_afterwards": True,
+                }
+                r = self._post_txt2img(safe_payload, timeout=300)
+                if r.status_code == 200:
+                    print("[safe-mode] Recovery succeeded.")
+                else:
+                    print(f"[safe-mode] Recovery failed: {r.text[:300] if r.text else 'Unknown error'}")
 
             if r.status_code == 200:
                 result = r.json()
