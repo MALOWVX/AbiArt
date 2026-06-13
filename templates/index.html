@@ -1051,6 +1051,9 @@
                 ['modalAdConfidence', 'modalAdConfidenceVal'],
                 ['modalAdStrength', 'modalAdStrengthVal'],
                 ['modalAdSteps', 'modalAdStepsVal'],
+                ['modalAd2Confidence', 'modalAd2ConfidenceVal'],
+                ['modalAd2Strength', 'modalAd2StrengthVal'],
+                ['modalAd2Steps', 'modalAd2StepsVal'],
                 ['modalHiresScale', 'modalHiresScaleVal'],
                 ['modalHiresDenoising', 'modalHiresDenoiseVal'],
                 ['modalHiresSteps', 'modalHiresStepsVal'],
@@ -1667,6 +1670,13 @@
                             adetailer_negative: document.getElementById('modalAdNegative').value,
                             adetailer_strength: parseFloat(document.getElementById('modalAdStrength').value),
                             adetailer_steps: parseInt(document.getElementById('modalAdSteps').value),
+                            adetailer2_enabled: document.getElementById('modalAd2Enable').checked,
+                            adetailer2_model: document.getElementById('modalAd2Model').value,
+                            adetailer2_confidence: parseFloat(document.getElementById('modalAd2Confidence').value),
+                            adetailer2_prompt: document.getElementById('modalAd2Prompt').value,
+                            adetailer2_negative: document.getElementById('modalAd2Negative').value,
+                            adetailer2_strength: parseFloat(document.getElementById('modalAd2Strength').value),
+                            adetailer2_steps: parseInt(document.getElementById('modalAd2Steps').value),
                             enable_hr: document.getElementById('modalHiresEnable').checked,
                             hr_upscaler: document.getElementById('modalHiresUpscaler').value,
                             hr_scale: parseFloat(document.getElementById('modalHiresScale').value),
@@ -2028,6 +2038,8 @@
             'modalSeed', 'modalClipSkip', 'modalScheduler', 'modalBatchCount',
             'modalAdetailer', 'modalAdSameCheckpoint', 'modalAdModel', 'modalAdPrompt', 'modalAdNegative',
             'modalAdStrength', 'modalAdSteps',
+            'modalAd2Enable', 'modalAd2Model', 'modalAd2Prompt', 'modalAd2Negative',
+            'modalAd2Strength', 'modalAd2Steps',
             'modalHiresEnable', 'modalHiresUpscaler', 'modalHiresScale',
             'modalHiresDenoising', 'modalHiresSteps',
             'modalVae'
@@ -2036,6 +2048,7 @@
             'hfGuidanceVal', 'cfgVal', 'stepsVal',
             'modalStepsVal', 'modalCfgVal', 'modalClipSkipVal',
             'modalAdStrengthVal', 'modalAdStepsVal',
+            'modalAd2ConfidenceVal', 'modalAd2StrengthVal', 'modalAd2StepsVal',
             'modalHiresScaleVal', 'modalHiresDenoiseVal', 'modalHiresStepsVal'
         ];
 
