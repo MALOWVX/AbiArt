@@ -620,6 +620,15 @@ def generate_modal():
         adetailer_strength = data.get('adetailer_strength', 0.4)
         adetailer_steps = data.get('adetailer_steps', 25)
 
+        # ADetailer #2 params (hands/body)
+        adetailer2_enabled = data.get('adetailer2_enabled', False)
+        adetailer2_model = data.get('adetailer2_model', 'hand_yolov8n.pt')
+        adetailer2_confidence = data.get('adetailer2_confidence', 0.3)
+        adetailer2_prompt = data.get('adetailer2_prompt', '')
+        adetailer2_negative = data.get('adetailer2_negative', '')
+        adetailer2_strength = data.get('adetailer2_strength', 0.4)
+        adetailer2_steps = data.get('adetailer2_steps', 25)
+
         # Hi-Res Fix params
         enable_hr = data.get('enable_hr', False)
         hr_upscaler = data.get('hr_upscaler', 'R-ESRGAN 4x+')
@@ -659,6 +668,13 @@ def generate_modal():
             "adetailer_negative": adetailer_negative,
             "adetailer_strength": adetailer_strength,
             "adetailer_steps": adetailer_steps,
+            "adetailer2_enabled": adetailer2_enabled,
+            "adetailer2_model": adetailer2_model,
+            "adetailer2_confidence": adetailer2_confidence,
+            "adetailer2_prompt": adetailer2_prompt,
+            "adetailer2_negative": adetailer2_negative,
+            "adetailer2_strength": adetailer2_strength,
+            "adetailer2_steps": adetailer2_steps,
             "enable_hr": enable_hr,
             "hr_upscaler": hr_upscaler,
             "hr_scale": hr_scale,

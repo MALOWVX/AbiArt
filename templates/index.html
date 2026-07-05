@@ -591,7 +591,7 @@
 
                     <!-- ADetailer -->
                     <details class="sb-section">
-                        <summary><i class="fas fa-face-smile"></i> ADetailer</summary>
+                        <summary><i class="fas fa-face-smile"></i> ADetailer #1 — Visage</summary>
                         <div class="sb-body">
                             <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
                                 <input type="checkbox" id="modalAdetailer"> Enable ADetailer
@@ -603,9 +603,12 @@
                             <div class="field">
                                 <label class="field-label">Detection Model</label>
                                 <select id="modalAdModel">
-                                    <option value="face_yolov8n.pt">face_yolov8n (fast)</option>
-                                    <option value="face_yolov8s.pt">face_yolov8s (better)</option>
-                                    <option value="person_yolov8n-seg.pt">person_yolov8n-seg</option>
+                                    <option value="face_yolov8n.pt">face_yolov8n (visage rapide)</option>
+                                    <option value="face_yolov8s.pt">face_yolov8s (visage précis)</option>
+                                    <option value="person_yolov8n-seg.pt">person_yolov8n-seg (corps)</option>
+                                    <option value="person_yolov8s-seg.pt">person_yolov8s-seg (corps précis)</option>
+                                    <option value="hand_yolov8n.pt">hand_yolov8n (mains)</option>
+                                    <option value="hand_yolov9c.pt">hand_yolov9c (mains précis)</option>
                                     <option value="mediapipe_face_full">mediapipe_face_full</option>
                                     <option value="mediapipe_face_short">mediapipe_face_short</option>
                                 </select>
@@ -637,6 +640,57 @@
                                     <label class="field-label">Steps <input type="number" class="field-val-input"
                                             id="modalAdStepsVal" value="25" min="10" max="50" step="1"></label>
                                     <input type="range" id="modalAdSteps" min="10" max="50" step="1" value="25">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- ADetailer #2 -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-hand"></i> ADetailer #2 — Mains / Corps</summary>
+                        <div class="sb-body">
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="modalAdetailer2"> Enable ADetailer #2
+                            </label>
+                            <div class="field">
+                                <label class="field-label">Detection Model</label>
+                                <select id="modalAd2Model">
+                                    <option value="hand_yolov8n.pt">hand_yolov8n (mains rapide)</option>
+                                    <option value="hand_yolov9c.pt">hand_yolov9c (mains précis)</option>
+                                    <option value="person_yolov8n-seg.pt">person_yolov8n-seg (corps)</option>
+                                    <option value="person_yolov8s-seg.pt">person_yolov8s-seg (corps précis)</option>
+                                    <option value="face_yolov8n.pt">face_yolov8n (visage)</option>
+                                    <option value="face_yolov8s.pt">face_yolov8s (visage précis)</option>
+                                    <option value="mediapipe_face_full">mediapipe_face_full</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Confidence Threshold <input type="number"
+                                        class="field-val-input" id="modalAd2ConfidenceVal" value="0.30" min="0.0"
+                                        max="1.0" step="0.05"></label>
+                                <input type="range" id="modalAd2Confidence" min="0.0" max="1.0" step="0.05" value="0.3">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Prompt</label>
+                                <input type="text" id="modalAd2Prompt" spellcheck="false"
+                                    placeholder="detailed hands, perfect fingers...">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Negative</label>
+                                <input type="text" id="modalAd2Negative" spellcheck="false" placeholder="">
+                            </div>
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Strength <input type="number" class="field-val-input"
+                                            id="modalAd2StrengthVal" value="0.40" min="0.1" max="1.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="modalAd2Strength" min="0.1" max="1.0" step="0.05"
+                                        value="0.4">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="modalAd2StepsVal" value="25" min="10" max="50" step="1"></label>
+                                    <input type="range" id="modalAd2Steps" min="10" max="50" step="1" value="25">
                                 </div>
                             </div>
                         </div>
@@ -1007,6 +1061,9 @@
                 ['modalAdConfidence', 'modalAdConfidenceVal'],
                 ['modalAdStrength', 'modalAdStrengthVal'],
                 ['modalAdSteps', 'modalAdStepsVal'],
+                ['modalAd2Confidence', 'modalAd2ConfidenceVal'],
+                ['modalAd2Strength', 'modalAd2StrengthVal'],
+                ['modalAd2Steps', 'modalAd2StepsVal'],
                 ['modalHiresScale', 'modalHiresScaleVal'],
                 ['modalHiresDenoising', 'modalHiresDenoiseVal'],
                 ['modalHiresSteps', 'modalHiresStepsVal'],
@@ -1623,6 +1680,13 @@
                             adetailer_negative: document.getElementById('modalAdNegative').value,
                             adetailer_strength: parseFloat(document.getElementById('modalAdStrength').value),
                             adetailer_steps: parseInt(document.getElementById('modalAdSteps').value),
+                            adetailer2_enabled: document.getElementById('modalAdetailer2').checked,
+                            adetailer2_model: document.getElementById('modalAd2Model').value,
+                            adetailer2_confidence: parseFloat(document.getElementById('modalAd2Confidence').value),
+                            adetailer2_prompt: document.getElementById('modalAd2Prompt').value,
+                            adetailer2_negative: document.getElementById('modalAd2Negative').value,
+                            adetailer2_strength: parseFloat(document.getElementById('modalAd2Strength').value),
+                            adetailer2_steps: parseInt(document.getElementById('modalAd2Steps').value),
                             enable_hr: document.getElementById('modalHiresEnable').checked,
                             hr_upscaler: document.getElementById('modalHiresUpscaler').value,
                             hr_scale: parseFloat(document.getElementById('modalHiresScale').value),
@@ -1685,6 +1749,21 @@
                     genInfo.width = document.getElementById('modalWidth').value;
                     genInfo.height = document.getElementById('modalHeight').value;
                     genInfo.clip_skip = document.getElementById('modalClipSkip').value;
+                    genInfo.adetailer = document.getElementById('modalAdetailer').checked;
+                    genInfo.adetailer_same_checkpoint = document.getElementById('modalAdSameCheckpoint').checked;
+                    genInfo.adetailer_model = document.getElementById('modalAdModel').value;
+                    genInfo.adetailer_confidence = parseFloat(document.getElementById('modalAdConfidence').value);
+                    genInfo.adetailer_prompt = document.getElementById('modalAdPrompt').value;
+                    genInfo.adetailer_negative = document.getElementById('modalAdNegative').value;
+                    genInfo.adetailer_strength = parseFloat(document.getElementById('modalAdStrength').value);
+                    genInfo.adetailer_steps = parseInt(document.getElementById('modalAdSteps').value);
+                    genInfo.adetailer2 = document.getElementById('modalAdetailer2').checked;
+                    genInfo.adetailer2_model = document.getElementById('modalAd2Model').value;
+                    genInfo.adetailer2_confidence = parseFloat(document.getElementById('modalAd2Confidence').value);
+                    genInfo.adetailer2_prompt = document.getElementById('modalAd2Prompt').value;
+                    genInfo.adetailer2_negative = document.getElementById('modalAd2Negative').value;
+                    genInfo.adetailer2_strength = parseFloat(document.getElementById('modalAd2Strength').value);
+                    genInfo.adetailer2_steps = parseInt(document.getElementById('modalAd2Steps').value);
                 } else if (currentBackend === 'kaggle') {
                     genInfo._loras = JSON.parse(JSON.stringify(activeLoRAs));
                     genInfo._model = document.getElementById('kaggleModel').value;
@@ -1711,7 +1790,7 @@
                     parts.push(`${info.width || 1024}×${info.height || 1024}`);
                     if (info.clip_skip > 1) parts.push(`<strong>Clip:</strong> ${info.clip_skip}`);
                     if (info.vae && info.vae !== 'Automatic') parts.push(`<strong>VAE:</strong> ${info.vae}`);
-                    if (info.adetailer) parts.push(`<strong>ADetailer:</strong> ✓`);
+                    if (info.adetailer) { let adLabel = 'ADetailer: \u2713'; if (info.adetailer2) adLabel += ' (x2)'; parts.push(`<strong>${adLabel}</strong>`); }
                     if (info.batch_count > 1) parts.push(`<strong>Batch:</strong> ${info.batch_count}`);
                     if (document.getElementById('modalHiresEnable') && document.getElementById('modalHiresEnable').checked) parts.push(`<strong>Hi-Res:</strong> ✓`);
                     parts.push(`<button class="btn btn-sm" onclick="recycleParams(0)" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
@@ -1867,7 +1946,7 @@
             parts.push(`<strong>CFG:</strong> ${info.cfg_scale || 7}`);
             parts.push(`${info.width || 1024}×${info.height || 1024}`);
             if (info.clip_skip > 1) parts.push(`<strong>Clip:</strong> ${info.clip_skip}`);
-            if (info.adetailer) parts.push(`<strong>ADetailer:</strong> ✓`);
+            if (info.adetailer) { let adLabel = 'ADetailer: \u2713'; if (info.adetailer2) adLabel += ' (x2)'; parts.push(`<strong>${adLabel}</strong>`); }
             parts.push(`<button class="btn btn-sm" onclick="recycleParams(${index})" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
             bar.innerHTML = parts.join(' &nbsp;|&nbsp; ');
             bar.style.display = 'block';
@@ -1907,6 +1986,27 @@
                 if (info._loras) {
                     activeModalLoras = JSON.parse(JSON.stringify(info._loras));
                     updateActiveLorasDisplay();
+                }
+                // Restore ADetailer #1
+                if (info.adetailer !== undefined) {
+                    document.getElementById('modalAdetailer').checked = info.adetailer;
+                    if (info.adetailer_same_checkpoint !== undefined) document.getElementById('modalAdSameCheckpoint').checked = info.adetailer_same_checkpoint;
+                    if (info.adetailer_model) uiSetSelect('modalAdModel', info.adetailer_model);
+                    if (info.adetailer_confidence !== undefined) uiSetSlider('modalAdConfidence', 'modalAdConfidenceVal', info.adetailer_confidence);
+                    if (info.adetailer_prompt !== undefined) document.getElementById('modalAdPrompt').value = info.adetailer_prompt;
+                    if (info.adetailer_negative !== undefined) document.getElementById('modalAdNegative').value = info.adetailer_negative;
+                    if (info.adetailer_strength !== undefined) uiSetSlider('modalAdStrength', 'modalAdStrengthVal', info.adetailer_strength);
+                    if (info.adetailer_steps !== undefined) uiSetSlider('modalAdSteps', 'modalAdStepsVal', info.adetailer_steps);
+                }
+                // Restore ADetailer #2
+                if (info.adetailer2 !== undefined) {
+                    document.getElementById('modalAdetailer2').checked = info.adetailer2;
+                    if (info.adetailer2_model) uiSetSelect('modalAd2Model', info.adetailer2_model);
+                    if (info.adetailer2_confidence !== undefined) uiSetSlider('modalAd2Confidence', 'modalAd2ConfidenceVal', info.adetailer2_confidence);
+                    if (info.adetailer2_prompt !== undefined) document.getElementById('modalAd2Prompt').value = info.adetailer2_prompt;
+                    if (info.adetailer2_negative !== undefined) document.getElementById('modalAd2Negative').value = info.adetailer2_negative;
+                    if (info.adetailer2_strength !== undefined) uiSetSlider('modalAd2Strength', 'modalAd2StrengthVal', info.adetailer2_strength);
+                    if (info.adetailer2_steps !== undefined) uiSetSlider('modalAd2Steps', 'modalAd2StepsVal', info.adetailer2_steps);
                 }
             } else if (currentBackend === 'kaggle') {
                 uiSetSlider('steps', 'stepsVal', info.steps);
@@ -1984,6 +2084,8 @@
             'modalSeed', 'modalClipSkip', 'modalScheduler', 'modalBatchCount',
             'modalAdetailer', 'modalAdSameCheckpoint', 'modalAdModel', 'modalAdPrompt', 'modalAdNegative',
             'modalAdStrength', 'modalAdSteps',
+            'modalAdetailer2', 'modalAd2Model', 'modalAd2Prompt', 'modalAd2Negative',
+            'modalAd2Strength', 'modalAd2Steps',
             'modalHiresEnable', 'modalHiresUpscaler', 'modalHiresScale',
             'modalHiresDenoising', 'modalHiresSteps',
             'modalVae'
@@ -1992,6 +2094,7 @@
             'hfGuidanceVal', 'cfgVal', 'stepsVal',
             'modalStepsVal', 'modalCfgVal', 'modalClipSkipVal',
             'modalAdStrengthVal', 'modalAdStepsVal',
+            'modalAd2ConfidenceVal', 'modalAd2StrengthVal', 'modalAd2StepsVal',
             'modalHiresScaleVal', 'modalHiresDenoiseVal', 'modalHiresStepsVal'
         ];
 
@@ -2027,9 +2130,10 @@
             const sliderMap = {
                 'hfGuidance': 'hfGuidanceVal', 'cfgScale': 'cfgVal', 'steps': 'stepsVal',
                 'modalCfgScale': 'modalCfgVal', 'modalSteps': 'modalStepsVal',
-                'modalClipSkip': 'modalClipSkipVal', 'modalAdStrength': 'modalAdStrengthVal',
-                'modalAdSteps': 'modalAdStepsVal', 'modalHiresScale': 'modalHiresScaleVal',
-                'modalHiresDenoising': 'modalHiresDenoiseVal', 'modalHiresSteps': 'modalHiresStepsVal'
+                'modalClipSkip': 'modalClipSkipVal', 
+                'modalAdConfidence': 'modalAdConfidenceVal', 'modalAdStrength': 'modalAdStrengthVal', 'modalAdSteps': 'modalAdStepsVal',
+                'modalAd2Confidence': 'modalAd2ConfidenceVal', 'modalAd2Strength': 'modalAd2StrengthVal', 'modalAd2Steps': 'modalAd2StepsVal',
+                'modalHiresScale': 'modalHiresScaleVal', 'modalHiresDenoising': 'modalHiresDenoiseVal', 'modalHiresSteps': 'modalHiresStepsVal'
             };
             Object.entries(sliderMap).forEach(([sliderId, valId]) => {
                 const slider = document.getElementById(sliderId);
@@ -2055,7 +2159,8 @@
             'modalCfgVal': 'modalCfgScale', 'modalStepsVal': 'modalSteps',
             'modalClipSkipVal': 'modalClipSkip', 'hfGuidanceVal': 'hfGuidance',
             'cfgVal': 'cfgScale', 'stepsVal': 'steps',
-            'modalAdStrengthVal': 'modalAdStrength', 'modalAdStepsVal': 'modalAdSteps',
+            'modalAdConfidenceVal': 'modalAdConfidence', 'modalAdStrengthVal': 'modalAdStrength', 'modalAdStepsVal': 'modalAdSteps',
+            'modalAd2ConfidenceVal': 'modalAd2Confidence', 'modalAd2StrengthVal': 'modalAd2Strength', 'modalAd2StepsVal': 'modalAd2Steps',
             'modalHiresScaleVal': 'modalHiresScale', 'modalHiresDenoiseVal': 'modalHiresDenoising',
             'modalHiresStepsVal': 'modalHiresSteps'
         };
