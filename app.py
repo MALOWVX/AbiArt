@@ -939,7 +939,7 @@ def tool_char_to_prompt():
     if not description:
         return jsonify({'error': 'No description provided'}), 400
 
-    api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-f470.up.railway.app/V1/chat/completions')
+    api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-9936.up.railway.app/V1/chat/completions')
     glm_key = os.environ.get('GLM_API_KEY', '')
 
     style_hints = {
@@ -967,7 +967,7 @@ Rules:
             headers['Authorization'] = f'Bearer {glm_key}'
 
         payload = {
-            'model': data.get('model', 'glm-4'),
+            'model': data.get('model', 'gpt-4'),
             'messages': [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': description}
@@ -1230,7 +1230,7 @@ def chat_glm():
         if not message and not image_b64:
             return jsonify({'error': 'Please provide a message or image'}), 400
 
-        api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-f470.up.railway.app/V1/chat/completions')
+        api_endpoint = os.environ.get('GLM_API_URL', 'https://openai-nim-proxy-production-9936.up.railway.app/V1/chat/completions')
         glm_key = os.environ.get('GLM_API_KEY', '')
 
         # If an image is provided, run it through WD-Tagger first to extract tags
@@ -1305,7 +1305,7 @@ def chat_glm():
             headers['Authorization'] = f'Bearer {glm_key}'
 
         payload = {
-            'model': 'glm-5',
+            'model': 'gpt-4',
             'messages': messages,
             'temperature': 0.7,
             'max_tokens': 1500
