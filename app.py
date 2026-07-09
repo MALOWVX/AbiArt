@@ -629,6 +629,15 @@ def generate_modal():
         adetailer2_strength = data.get('adetailer2_strength', 0.4)
         adetailer2_steps = data.get('adetailer2_steps', 25)
 
+        # ControlNet / IP-Adapter params
+        controlnet_enabled = data.get('controlnet_enabled', False)
+        controlnet_image = data.get('controlnet_image', '')
+        controlnet_module = data.get('controlnet_module', 'none')
+        controlnet_model = data.get('controlnet_model', 'None')
+        controlnet_weight = data.get('controlnet_weight', 0.8)
+        controlnet_guidance_start = data.get('controlnet_guidance_start', 0.0)
+        controlnet_guidance_end = data.get('controlnet_guidance_end', 1.0)
+
         # Hi-Res Fix params
         enable_hr = data.get('enable_hr', False)
         hr_upscaler = data.get('hr_upscaler', 'R-ESRGAN 4x+')
@@ -675,6 +684,13 @@ def generate_modal():
             "adetailer2_negative": adetailer2_negative,
             "adetailer2_strength": adetailer2_strength,
             "adetailer2_steps": adetailer2_steps,
+            "controlnet_enabled": controlnet_enabled,
+            "controlnet_image": controlnet_image,
+            "controlnet_module": controlnet_module,
+            "controlnet_model": controlnet_model,
+            "controlnet_weight": controlnet_weight,
+            "controlnet_guidance_start": controlnet_guidance_start,
+            "controlnet_guidance_end": controlnet_guidance_end,
             "enable_hr": enable_hr,
             "hr_upscaler": hr_upscaler,
             "hr_scale": hr_scale,

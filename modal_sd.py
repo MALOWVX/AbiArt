@@ -43,10 +43,24 @@ image = (
     )
     # Install xformers matching PyTorch 2.1.2+cu121
     .pip_install("xformers==0.0.23.post1")
-    # Install ADetailer extension
+    # Install ADetailer and ControlNet extensions
     .run_commands(
         f"git clone --depth 1 https://github.com/Bing-su/adetailer.git {A1111_DIR}/extensions/adetailer",
         "pip install ultralytics mediapipe",
+        f"git clone --depth 1 https://github.com/Mikubill/sd-webui-controlnet.git {A1111_DIR}/extensions/sd-webui-controlnet",
+    )
+    # Download ControlNet SDXL models
+    .run_commands(
+        f"mkdir -p {A1111_DIR}/extensions/sd-webui-controlnet/models",
+        f"wget -q -O {A1111_DIR}/extensions/sd-webui-controlnet/models/ip-adapter_sdxl_vit-h.safetensors https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/ip-adapter_sdxl_vit-h.safetensors",
+        f"wget -q -O {A1111_DIR}/extensions/sd-webui-controlnet/models/sai_xl_canny_2x.safetensors https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/sai_xl_canny_2x.safetensors",
+        f"wget -q -O {A1111_DIR}/extensions/sd-webui-controlnet/models/sai_xl_depth_2x.safetensors https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/sai_xl_depth_2x.safetensors",
+        f"wget -q -O {A1111_DIR}/extensions/sd-webui-controlnet/models/thibaud_xl_openpose_2e1b.safetensors https://huggingface.co/lllyasviel/sd_control_collection/resolve/main/thibaud_xl_openpose_2e1b.safetensors",
+    )
+    # Download Clip Vision encoder for IP-Adapter
+    .run_commands(
+        f"mkdir -p {A1111_DIR}/models/clip_vision",
+        f"wget -q -O {A1111_DIR}/models/clip_vision/clip_g.safetensors https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors",
     )
     # Remove default model directories (will be symlinked to volume at runtime)
     .run_commands(
@@ -66,7 +80,7 @@ image = (
         f"wget -q -O {A1111_DIR}/models/VAE/sdxl_vae.safetensors "
         "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors",
     )
-    .run_commands("echo a1111-v16")  # Cache buster
+    .run_commands("echo a1111-v17-controlnet")  # Cache buster
 )
 
 # Volume to persist models between runs
@@ -368,6 +382,15 @@ class StableDiffusion:
             adetailer2_strength = float(data.get("adetailer2_strength", 0.4))
             adetailer2_steps = int(data.get("adetailer2_steps", 25))
 
+            # ControlNet / IP-Adapter params
+            controlnet_enabled = data.get("controlnet_enabled", False)
+            controlnet_image = data.get("controlnet_image", "")
+            controlnet_module = data.get("controlnet_module", "none")
+            controlnet_model = data.get("controlnet_model", "None")
+            controlnet_weight = float(data.get("controlnet_weight", 0.8))
+            controlnet_guidance_start = float(data.get("controlnet_guidance_start", 0.0))
+            controlnet_guidance_end = float(data.get("controlnet_guidance_end", 1.0))
+
             if not prompt:
                 return {"error": "No prompt provided"}
 
@@ -431,6 +454,9 @@ class StableDiffusion:
                 payload["denoising_strength"] = hires_denoising
                 payload["hr_second_pass_steps"] = hires_steps
 
+            # Build alwayson_scripts
+            alwayson_scripts = {}
+
             # Add ADetailer if enabled. ADetailer accepts multiple detection
             # tabs: each extra dict in `args` is an additional pass.
             if adetailer_enabled or adetailer2_enabled:
@@ -458,11 +484,35 @@ class StableDiffusion:
                         "ad_steps": adetailer2_steps,
                         "ad_cfg_scale": cfg,
                     })
-                payload["alwayson_scripts"] = {
-                    "ADetailer": {
-                        "args": ad_args
-                    }
+                alwayson_scripts["ADetailer"] = {
+                    "args": ad_args
                 }
+
+            # Add ControlNet if enabled and image is provided
+            if controlnet_enabled and controlnet_image:
+                # strip data URL prefix if present in the base64 string
+                pure_b64 = controlnet_image
+                if "," in pure_b64:
+                    pure_b64 = pure_b64.split(",", 1)[1]
+                
+                cn_args = [
+                    {
+                        "input_image": pure_b64,
+                        "module": controlnet_module,
+                        "model": controlnet_model,
+                        "weight": controlnet_weight,
+                        "guidance_start": controlnet_guidance_start,
+                        "guidance_end": controlnet_guidance_end,
+                        "pixel_perfect": True,
+                        "control_mode": "Balanced"
+                    }
+                ]
+                alwayson_scripts["ControlNet"] = {
+                    "args": cn_args
+                }
+
+            if alwayson_scripts:
+                payload["alwayson_scripts"] = alwayson_scripts
 
             print(f"Generating: {prompt[:80]}...")
             print(f"  Sampler: {sampler_name}, Steps: {steps}, CFG: {cfg}, Size: {width}x{height}")
@@ -475,6 +525,8 @@ class StableDiffusion:
                 print(f"  ADetailer #2: ON (model={adetailer2_model}, confidence={adetailer2_confidence}, strength={adetailer2_strength}, steps={adetailer2_steps})")
             if hires_enabled:
                 print(f"  Hi-Res Fix: ON ({hires_upscaler}, scale={hires_scale}, denoise={hires_denoising}, steps={hires_steps})")
+            if controlnet_enabled and controlnet_image:
+                print(f"  ControlNet: ON (module={controlnet_module}, model={controlnet_model}, weight={controlnet_weight})")
 
             # Call A1111's txt2img API (longer timeout for hi-res)
             gen_timeout = 600 if hires_enabled else 300

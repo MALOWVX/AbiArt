@@ -696,6 +696,63 @@
                         </div>
                     </details>
 
+                    <!-- Image de Référence (ControlNet / IP-Adapter) -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-image"></i> Image de Référence</summary>
+                        <div class="sb-body">
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="modalControlnet"> Activer l'image de référence
+                            </label>
+                            
+                            <div class="field" style="margin-top:.4rem">
+                                <div class="cn-drop-area" id="cnDropArea" style="border: 1.5px dashed var(--border,#444); border-radius: 6px; padding: 1.2rem; text-align: center; cursor: pointer; background: rgba(255,255,255,0.02); transition: .2s;" onmouseover="this.style.borderColor='var(--accent,#7f56da)'" onmouseout="this.style.borderColor='var(--border,#444)'">
+                                    <p style="font-size: .7rem; margin: 0; pointer-events: none; color: var(--text-muted,#888);"><i class="fas fa-cloud-upload-alt" style="font-size: 1.2rem; color: var(--accent,#7f56da); display: block; margin-bottom: .3rem;"></i> Glisser ou cliquer pour charger l'image</p>
+                                    <input type="file" id="cnFileInput" accept="image/*" style="display:none">
+                                </div>
+                                <div id="cnPreviewContainer" style="display: none; position: relative; margin-top: .5rem; border-radius: 6px; overflow: hidden; border: 1px solid var(--border,#444);">
+                                    <img id="cnPreviewImg" style="width: 100%; display: block; max-height: 180px; object-fit: contain; background: #111;">
+                                    <button type="button" class="btn btn-sm" id="btnRemoveCnImage" style="position: absolute; top: 6px; right: 6px; background: rgba(255,0,0,0.85); border: none; color: #fff; padding: .2rem .4rem; border-radius: 4px; cursor: pointer; font-size: .65rem;" title="Supprimer l'image"><i class="fas fa-trash-alt"></i> Supprimer</button>
+                                </div>
+                            </div>
+
+                            <div class="field">
+                                <label class="field-label">Mode / Type de Contrôle</label>
+                                <select id="modalCnMode">
+                                    <option value="none:ip-adapter_sdxl_vit-h.safetensors">IP-Adapter (Transférer style, vêtements, bijoux)</option>
+                                    <option value="reference_only:None">Reference-Only (Guidage visuel simple - pas de modèle)</option>
+                                    <option value="canny:sai_xl_canny_2x.safetensors">Contours (Canny)</option>
+                                    <option value="depth_midas:sai_xl_depth_2x.safetensors">Profondeur (Depth)</option>
+                                    <option value="openpose:thibaud_xl_openpose_2e1b.safetensors">Pose du corps (OpenPose)</option>
+                                </select>
+                            </div>
+
+                            <div class="field">
+                                <label class="field-label">Poids / Influence <input type="number"
+                                        class="field-val-input" id="modalCnWeightVal" value="0.80" min="0.0"
+                                        max="2.0" step="0.05"></label>
+                                <input type="range" id="modalCnWeight" min="0.0" max="2.0" step="0.05" value="0.8">
+                            </div>
+
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Début <input type="number" class="field-val-input"
+                                            id="modalCnStartVal" value="0.00" min="0.0" max="1.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="modalCnStart" min="0.0" max="1.0" step="0.05"
+                                        value="0.0">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Fin <input type="number" class="field-val-input"
+                                            id="modalCnEndVal" value="1.00" min="0.0" max="1.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="modalCnEnd" min="0.0" max="1.0" step="0.05"
+                                        value="1.0">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+
                     <!-- NaN Fix (Model Priming) -->
                     <details class="sb-section">
                         <summary><i class="fas fa-shield-halved"></i> NaN Fix</summary>
@@ -910,6 +967,7 @@
     <script>
         // ========== STATE ==========
         let currentBackend = 'huggingface';
+        let _cnImageB64 = '';
         let kaggleUrl = localStorage.getItem('kaggle_url') || '';
         let activeLoRAs = [];
         let currentModelTab = 'checkpoints';
@@ -1067,6 +1125,9 @@
                 ['modalHiresScale', 'modalHiresScaleVal'],
                 ['modalHiresDenoising', 'modalHiresDenoiseVal'],
                 ['modalHiresSteps', 'modalHiresStepsVal'],
+                ['modalCnWeight', 'modalCnWeightVal'],
+                ['modalCnStart', 'modalCnStartVal'],
+                ['modalCnEnd', 'modalCnEndVal'],
             ];
             sliderPairs.forEach(([sliderId, inputId]) => {
                 const slider = document.getElementById(sliderId);
@@ -1096,6 +1157,9 @@
             document.getElementById('civitaiSearch').addEventListener('keypress', e => {
                 if (e.key === 'Enter') searchCivitai();
             });
+
+            // ControlNet drop-zone init
+            initControlNetDropZone();
         }
 
         // ========== BACKEND SWITCHING ==========
@@ -1687,6 +1751,13 @@
                             adetailer2_negative: document.getElementById('modalAd2Negative').value,
                             adetailer2_strength: parseFloat(document.getElementById('modalAd2Strength').value),
                             adetailer2_steps: parseInt(document.getElementById('modalAd2Steps').value),
+                            controlnet_enabled: document.getElementById('modalControlnet').checked,
+                            controlnet_image: _cnImageB64,
+                            controlnet_module: document.getElementById('modalCnMode').value.split(':')[0],
+                            controlnet_model: document.getElementById('modalCnMode').value.split(':')[1],
+                            controlnet_weight: parseFloat(document.getElementById('modalCnWeight').value),
+                            controlnet_guidance_start: parseFloat(document.getElementById('modalCnStart').value),
+                            controlnet_guidance_end: parseFloat(document.getElementById('modalCnEnd').value),
                             enable_hr: document.getElementById('modalHiresEnable').checked,
                             hr_upscaler: document.getElementById('modalHiresUpscaler').value,
                             hr_scale: parseFloat(document.getElementById('modalHiresScale').value),
@@ -1764,6 +1835,12 @@
                     genInfo.adetailer2_negative = document.getElementById('modalAd2Negative').value;
                     genInfo.adetailer2_strength = parseFloat(document.getElementById('modalAd2Strength').value);
                     genInfo.adetailer2_steps = parseInt(document.getElementById('modalAd2Steps').value);
+                    genInfo.controlnet_enabled = document.getElementById('modalControlnet').checked;
+                    genInfo.controlnet_image = _cnImageB64;
+                    genInfo.controlnet_mode = document.getElementById('modalCnMode').value;
+                    genInfo.controlnet_weight = parseFloat(document.getElementById('modalCnWeight').value);
+                    genInfo.controlnet_start = parseFloat(document.getElementById('modalCnStart').value);
+                    genInfo.controlnet_end = parseFloat(document.getElementById('modalCnEnd').value);
                 } else if (currentBackend === 'kaggle') {
                     genInfo._loras = JSON.parse(JSON.stringify(activeLoRAs));
                     genInfo._model = document.getElementById('kaggleModel').value;
@@ -1791,6 +1868,7 @@
                     if (info.clip_skip > 1) parts.push(`<strong>Clip:</strong> ${info.clip_skip}`);
                     if (info.vae && info.vae !== 'Automatic') parts.push(`<strong>VAE:</strong> ${info.vae}`);
                     if (info.adetailer) { let adLabel = 'ADetailer: \u2713'; if (info.adetailer2) adLabel += ' (x2)'; parts.push(`<strong>${adLabel}</strong>`); }
+                    if (info.controlnet_enabled) parts.push(`<strong>ControlNet:</strong> \u2713`);
                     if (info.batch_count > 1) parts.push(`<strong>Batch:</strong> ${info.batch_count}`);
                     if (document.getElementById('modalHiresEnable') && document.getElementById('modalHiresEnable').checked) parts.push(`<strong>Hi-Res:</strong> ✓`);
                     parts.push(`<button class="btn btn-sm" onclick="recycleParams(0)" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
@@ -1947,6 +2025,7 @@
             parts.push(`${info.width || 1024}×${info.height || 1024}`);
             if (info.clip_skip > 1) parts.push(`<strong>Clip:</strong> ${info.clip_skip}`);
             if (info.adetailer) { let adLabel = 'ADetailer: \u2713'; if (info.adetailer2) adLabel += ' (x2)'; parts.push(`<strong>${adLabel}</strong>`); }
+            if (info.controlnet_enabled) parts.push(`<strong>ControlNet:</strong> \u2713`);
             parts.push(`<button class="btn btn-sm" onclick="recycleParams(${index})" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
             bar.innerHTML = parts.join(' &nbsp;|&nbsp; ');
             bar.style.display = 'block';
@@ -2007,6 +2086,25 @@
                     if (info.adetailer2_negative !== undefined) document.getElementById('modalAd2Negative').value = info.adetailer2_negative;
                     if (info.adetailer2_strength !== undefined) uiSetSlider('modalAd2Strength', 'modalAd2StrengthVal', info.adetailer2_strength);
                     if (info.adetailer2_steps !== undefined) uiSetSlider('modalAd2Steps', 'modalAd2StepsVal', info.adetailer2_steps);
+                }
+                // Restore ControlNet
+                if (info.controlnet_enabled !== undefined) {
+                    document.getElementById('modalControlnet').checked = info.controlnet_enabled;
+                    if (info.controlnet_mode) uiSetSelect('modalCnMode', info.controlnet_mode);
+                    if (info.controlnet_weight !== undefined) uiSetSlider('modalCnWeight', 'modalCnWeightVal', info.controlnet_weight);
+                    if (info.controlnet_start !== undefined) uiSetSlider('modalCnStart', 'modalCnStartVal', info.controlnet_start);
+                    if (info.controlnet_end !== undefined) uiSetSlider('modalCnEnd', 'modalCnEndVal', info.controlnet_end);
+                    if (info.controlnet_image) {
+                        _cnImageB64 = info.controlnet_image;
+                        document.getElementById('cnPreviewContainer').style.display = 'block';
+                        document.getElementById('cnPreviewImg').src = info.controlnet_image;
+                        document.getElementById('cnDropArea').style.display = 'none';
+                    } else {
+                        _cnImageB64 = '';
+                        document.getElementById('cnPreviewContainer').style.display = 'none';
+                        document.getElementById('cnPreviewImg').src = '';
+                        document.getElementById('cnDropArea').style.display = 'block';
+                    }
                 }
             } else if (currentBackend === 'kaggle') {
                 uiSetSlider('steps', 'stepsVal', info.steps);
@@ -2088,14 +2186,16 @@
             'modalAd2Strength', 'modalAd2Steps',
             'modalHiresEnable', 'modalHiresUpscaler', 'modalHiresScale',
             'modalHiresDenoising', 'modalHiresSteps',
-            'modalVae'
+            'modalVae',
+            'modalControlnet', 'modalCnMode', 'modalCnWeight', 'modalCnStart', 'modalCnEnd'
         ];
         const VAL_INPUT_IDS = [
             'hfGuidanceVal', 'cfgVal', 'stepsVal',
             'modalStepsVal', 'modalCfgVal', 'modalClipSkipVal',
             'modalAdStrengthVal', 'modalAdStepsVal',
             'modalAd2ConfidenceVal', 'modalAd2StrengthVal', 'modalAd2StepsVal',
-            'modalHiresScaleVal', 'modalHiresDenoiseVal', 'modalHiresStepsVal'
+            'modalHiresScaleVal', 'modalHiresDenoiseVal', 'modalHiresStepsVal',
+            'modalCnWeightVal', 'modalCnStartVal', 'modalCnEndVal'
         ];
 
         function gatherSettings() {
@@ -2133,7 +2233,8 @@
                 'modalClipSkip': 'modalClipSkipVal', 
                 'modalAdConfidence': 'modalAdConfidenceVal', 'modalAdStrength': 'modalAdStrengthVal', 'modalAdSteps': 'modalAdStepsVal',
                 'modalAd2Confidence': 'modalAd2ConfidenceVal', 'modalAd2Strength': 'modalAd2StrengthVal', 'modalAd2Steps': 'modalAd2StepsVal',
-                'modalHiresScale': 'modalHiresScaleVal', 'modalHiresDenoising': 'modalHiresDenoiseVal', 'modalHiresSteps': 'modalHiresStepsVal'
+                'modalHiresScale': 'modalHiresScaleVal', 'modalHiresDenoising': 'modalHiresDenoiseVal', 'modalHiresSteps': 'modalHiresStepsVal',
+                'modalCnWeight': 'modalCnWeightVal', 'modalCnStart': 'modalCnStartVal', 'modalCnEnd': 'modalCnEndVal'
             };
             Object.entries(sliderMap).forEach(([sliderId, valId]) => {
                 const slider = document.getElementById(sliderId);
@@ -2162,7 +2263,8 @@
             'modalAdConfidenceVal': 'modalAdConfidence', 'modalAdStrengthVal': 'modalAdStrength', 'modalAdStepsVal': 'modalAdSteps',
             'modalAd2ConfidenceVal': 'modalAd2Confidence', 'modalAd2StrengthVal': 'modalAd2Strength', 'modalAd2StepsVal': 'modalAd2Steps',
             'modalHiresScaleVal': 'modalHiresScale', 'modalHiresDenoiseVal': 'modalHiresDenoising',
-            'modalHiresStepsVal': 'modalHiresSteps'
+            'modalHiresStepsVal': 'modalHiresSteps',
+            'modalCnWeightVal': 'modalCnWeight', 'modalCnStartVal': 'modalCnStart', 'modalCnEndVal': 'modalCnEnd'
         };
         document.addEventListener('input', (e) => {
             // Normalize comma decimal separator (French locale)
@@ -2262,6 +2364,39 @@
             document.querySelector(`.tool-tab[data-tool="${name}"]`).classList.add('active');
             document.querySelectorAll('.tool-panel').forEach(p => p.style.display = 'none');
             document.getElementById('tool_' + name).style.display = 'block';
+        }
+
+        // --- ControlNet Helpers ---
+        function initControlNetDropZone() {
+            const zone = document.getElementById('cnDropArea');
+            const inp = document.getElementById('cnFileInput');
+            const removeBtn = document.getElementById('btnRemoveCnImage');
+            if (!zone) return;
+            zone.onclick = () => inp.click();
+            zone.ondragover = e => { e.preventDefault(); zone.style.borderColor = 'var(--accent,#7f56da)'; };
+            zone.ondragleave = () => zone.style.borderColor = 'var(--border,#444)';
+            zone.ondrop = e => { e.preventDefault(); zone.style.borderColor = 'var(--border,#444)'; if (e.dataTransfer.files[0]) loadControlNetImage(e.dataTransfer.files[0]); };
+            inp.onchange = e => { if (e.target.files[0]) loadControlNetImage(e.target.files[0]); };
+            if (removeBtn) {
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    _cnImageB64 = '';
+                    document.getElementById('cnPreviewContainer').style.display = 'none';
+                    document.getElementById('cnPreviewImg').src = '';
+                    document.getElementById('cnDropArea').style.display = 'block';
+                };
+            }
+        }
+        function loadControlNetImage(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                _cnImageB64 = e.target.result;
+                document.getElementById('cnPreviewContainer').style.display = 'block';
+                document.getElementById('cnPreviewImg').src = e.target.result;
+                document.getElementById('cnDropArea').style.display = 'none';
+                document.getElementById('modalControlnet').checked = true;
+            };
+            reader.readAsDataURL(file);
         }
 
         // --- Tool 1: Image Tagger ---
