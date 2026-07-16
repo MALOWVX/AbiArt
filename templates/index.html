@@ -836,7 +836,7 @@
                         <summary><i class="fas fa-download"></i> Add Model (Civitai)</summary>
                         <div class="sb-body">
                             <div class="field">
-                                <input type="text" id="civitaiUrl" placeholder="https://civitai.com/models/...">
+                                <input type="text" id="civitaiUrl" placeholder="https://civitai.com ou civitai.red/models/...">
                             </div>
                             <div class="field">
                                 <input type="text" id="civitaiFilename" placeholder="model_name.safetensors">
@@ -851,7 +851,7 @@
                             <button class="btn-accent" onclick="downloadFromCivitaiUrl()" style="padding:.5rem">
                                 <i class="fas fa-cloud-download-alt"></i> Download Model
                             </button>
-                            <a href="https://civitai.com/user/account" target="_blank"
+                            <a href="https://civitai.red/user/account" target="_blank"
                                 style="font-size:.6rem;color:var(--accent2)">Get Civitai API token →</a>
                             <div id="downloadStatus" style="display:none;margin-top:.3rem">
                                 <p style="font-size:.7rem;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i>
@@ -1566,6 +1566,12 @@
             } catch (e) { showToast('Download failed: ' + e.message); }
         }
 
+        // Detect Civitai base domain from a URL (supports civitai.com and civitai.red)
+        function getCivitaiBase(url) {
+            if (url && url.includes('civitai.red')) return 'https://civitai.red';
+            return 'https://civitai.com';
+        }
+
         async function downloadFromCivitaiUrl() {
             const url = document.getElementById('civitaiUrl').value.trim();
             let filename = document.getElementById('civitaiFilename').value.trim();
@@ -1575,6 +1581,7 @@
             const statusDiv = document.getElementById('downloadStatus');
             const statusText = document.getElementById('downloadStatusText');
             statusDiv.style.display = 'block'; statusText.textContent = 'Resolving model info...';
+            const civitaiBase = getCivitaiBase(url);
             try {
                 let modelVersionId = null, modelId = null;
                 let modelInfo = null;
@@ -1586,7 +1593,7 @@
                 // Always fetch model info if we have a modelId (needed for trigger words)
                 if (modelId) {
                     statusText.textContent = 'Looking up model info...';
-                    const infoResp = await fetch(`https://civitai.com/api/v1/models/${modelId}`);
+                    const infoResp = await fetch(`${civitaiBase}/api/v1/models/${modelId}`);
                     if (!infoResp.ok) throw new Error('Could not find model on Civitai');
                     modelInfo = await infoResp.json();
                     const versions = modelInfo.modelVersions || [];
@@ -1598,7 +1605,7 @@
                 }
                 if (!modelVersionId) throw new Error('Could not extract model/version ID');
                 if (!filename) filename = isLora ? `lora_${modelVersionId}.safetensors` : `model_${modelVersionId}.safetensors`;
-                let downloadUrl = `https://civitai.com/api/download/models/${modelVersionId}`;
+                let downloadUrl = `${civitaiBase}/api/download/models/${modelVersionId}`;
                 if (token) downloadUrl += `?token=${token}`;
                 statusText.textContent = `Downloading ${isLora ? 'LoRA' : 'checkpoint'}: ${filename}...`;
                 const response = await fetch('/api/modal/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_url: downloadUrl, filename, is_lora: isLora }) });
@@ -2678,7 +2685,7 @@
             if (!el) return;
             el.innerHTML = `<span style="font-size:.65rem;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> Looking up model on Civitai...</span>`;
             try {
-                const resp = await fetch(`https://civitai.com/api/v1/model-versions/by-hash/${hash}`);
+                const resp = await fetch(`https://civitai.red/api/v1/model-versions/by-hash/${hash}`);
                 if (!resp.ok) throw new Error('not found');
                 const data = await resp.json();
                 const modelId = data.modelId;
@@ -2687,7 +2694,7 @@
                 const type = data.model?.type || 'Checkpoint';
                 const isLora = type === 'LORA' || type === 'LoCon';
                 const filename = (data.files || [])[0]?.name || '';
-                const civitaiUrl = `https://civitai.com/models/${modelId}?modelVersionId=${versionId}`;
+                const civitaiUrl = `https://civitai.red/models/${modelId}?modelVersionId=${versionId}`;
 
                 el.innerHTML = `
                     <div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:var(--bg2);border:1px solid var(--accent);margin-top:.25rem">

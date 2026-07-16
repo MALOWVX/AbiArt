@@ -512,7 +512,7 @@ def search_civitai():
             params['query'] = query
 
         response = requests.get(
-            'https://civitai.com/api/v1/models',
+            'https://civitai.red/api/v1/models',
             params=params,
             timeout=15
         )
