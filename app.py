@@ -536,13 +536,17 @@ def search_civitai():
                 images = version.get('images', [{}])
                 image_url = images[0].get('url', '') if images else ''
 
+                raw_download_url = primary_file.get('downloadUrl', '')
+                if 'civitai.com' in raw_download_url:
+                    raw_download_url = raw_download_url.replace('civitai.com', 'civitai.red')
+
                 models.append({
                     'id': item.get('id'),
                     'name': item.get('name'),
                     'type': item_type,
                     'version': version.get('name'),
                     'image': image_url,
-                    'download_url': primary_file.get('downloadUrl', ''),
+                    'download_url': raw_download_url,
                     'filename': primary_file.get('name', 'model.safetensors'),
                     'trained_words': version.get('trainedWords', [])
                 })

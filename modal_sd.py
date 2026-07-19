@@ -616,6 +616,10 @@ class StableDiffusion:
             if not model_url:
                 return {"error": "No model URL provided"}
 
+            # Force using civitai.red to bypass civitai.com download blocks
+            if "civitai.com" in model_url:
+                model_url = model_url.replace("civitai.com", "civitai.red")
+
             # Add Civitai token if available
             civitai_token = os.environ.get("CIVITAI_TOKEN", "")
             if civitai_token and "token=" not in model_url:
