@@ -5,7 +5,9 @@ import random
 import sqlite3
 import logging
 import traceback
+import io
 import requests
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 from collections import deque
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, session
@@ -188,14 +190,29 @@ def deduct_credits(user_id, image_count):
 # Initialize database on startup
 init_db()
 
-# Hugging Face Configuration
-HF_API_URL = "https://api-inference.huggingface.co/models/"
+# Hugging Face Configuration (modern inference router & default token)
+HF_ROUTER_URL = os.environ.get("HF_API_URL", "https://router.huggingface.co/hf-inference/models/")
+HF_LEGACY_URL = "https://api-inference.huggingface.co/models/"
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
+
+# Curated high-performance models (FLUX.1, SD 3.5, SDXL Lightning, Anime, etc.)
 HF_MODELS = {
+    "flux-schnell": "black-forest-labs/FLUX.1-schnell",
+    "flux-dev": "black-forest-labs/FLUX.1-dev",
+    "sd3.5-large": "stabilityai/stable-diffusion-3.5-large",
+    "sd3.5-medium": "stabilityai/stable-diffusion-3.5-medium",
+    "sdxl-lightning": "ByteDance/SDXL-Lightning",
+    "illustrious": "OnomaAIResearch/Illustrious-xl-early-release-v0",
+    "animagine-xl": "cagliostrolab/animagine-xl-3.1",
     "sdxl": "stabilityai/stable-diffusion-xl-base-1.0",
+    "dreamshaper": "Lykon/dreamshaper-8",
     "sd15": "runwayml/stable-diffusion-v1-5",
     "sdxl-turbo": "stabilityai/sdxl-turbo",
-    "dreamshaper": "Lykon/dreamshaper-8",
 }
+
+# Image Processing Models (Background removal & Multimodal Captioning)
+HF_RMBG_MODEL = "briaai/RMBG-1.4"
+HF_CAPTION_MODEL = "Salesforce/blip-image-captioning-large"
 
 # Modal Backend URLs (loaded from environment)
 MODAL_GENERATE_URL = os.environ.get(
@@ -218,6 +235,15 @@ MODAL_VERIFY_URL = os.environ.get(
     "MODAL_VERIFY_URL",
     "https://YOUR_USERNAME--stable-diffusion-api-stablediffusion-verify-models-dev.modal.run"
 )
+MODAL_IMG2IMG_URL = os.environ.get(
+    "MODAL_IMG2IMG_URL",
+    "https://YOUR_USERNAME--stable-diffusion-api-stablediffusion-api-img2img-dev.modal.run"
+)
+MODAL_UPSCALE_URL = os.environ.get(
+    "MODAL_UPSCALE_URL",
+    "https://YOUR_USERNAME--stable-diffusion-api-stablediffusion-api-upscale-dev.modal.run"
+)
+
 
 
 @app.route('/')
@@ -319,60 +345,95 @@ def logout():
 
 @app.route('/generate', methods=['POST'])
 def generate_hf():
-    """Generate image using Hugging Face API"""
+    """Generate image using Hugging Face API (FLUX.1, SD 3.5, SDXL Lightning, etc.)"""
     try:
         # Credit check (HF generates 1 image)
         user, err = check_credits(1)
         if err:
             return err
 
-        data = request.json
-        prompt = data.get('prompt', '')
-        negative_prompt = data.get('negative_prompt', '')
-        model_key = data.get('model', 'sdxl')
-        guidance_scale = data.get('guidance_scale', 7.5)
-        api_key = data.get('api_key', '')
+        data = request.json or {}
+        prompt = data.get('prompt', '').strip()
+        negative_prompt = data.get('negative_prompt', '').strip()
+        model_key = data.get('model', 'flux-schnell')
+        api_key = data.get('api_key', '').strip() or HF_TOKEN
+        width = int(data.get('width', 1024))
+        height = int(data.get('height', 1024))
 
         if not prompt:
             return jsonify({'error': 'Please provide a prompt'}), 400
         if not api_key:
-            return jsonify({'error': 'API key required'}), 400
+            return jsonify({
+                'error': 'Hugging Face API token required. Please set HF_TOKEN in your .env file or enter your token in the API key field.'
+            }), 400
 
-        model_id = HF_MODELS.get(model_key, HF_MODELS['sdxl'])
-        api_url = f"{HF_API_URL}{model_id}"
+        model_id = HF_MODELS.get(model_key, HF_MODELS.get('flux-schnell'))
+        api_url = f"{HF_ROUTER_URL}{model_id}"
+
+        # Model-specific parameter tuning
+        parameters = {
+            "width": width,
+            "height": height,
+        }
+
+        is_flux = "flux" in model_key.lower()
+        if is_flux:
+            # Flux operates best without negative prompts and with specific guidance
+            if "schnell" in model_key:
+                parameters["num_inference_steps"] = int(data.get('steps', 4))
+                # Schnell uses 0 or 1 guidance
+                parameters["guidance_scale"] = float(data.get('guidance_scale', 0.0))
+            else:
+                parameters["num_inference_steps"] = int(data.get('steps', 28))
+                parameters["guidance_scale"] = float(data.get('guidance_scale', 3.5))
+        elif "lightning" in model_key:
+            parameters["num_inference_steps"] = int(data.get('steps', 4))
+            parameters["guidance_scale"] = float(data.get('guidance_scale', 1.0))
+            if negative_prompt:
+                parameters["negative_prompt"] = negative_prompt
+        else:
+            # Standard SDXL / SD 1.5
+            parameters["guidance_scale"] = float(data.get('guidance_scale', 7.5))
+            if negative_prompt:
+                parameters["negative_prompt"] = negative_prompt
 
         payload = {
             "inputs": prompt,
-            "parameters": {
-                "guidance_scale": guidance_scale,
-            }
+            "parameters": parameters
         }
-        if negative_prompt:
-            payload["parameters"]["negative_prompt"] = negative_prompt
 
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
 
-        response = requests.post(api_url, headers=headers, json=payload, timeout=120)
+        try:
+            response = requests.post(api_url, headers=headers, json=payload, timeout=120)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            # Fallback to legacy endpoint if router network error
+            legacy_url = f"{HF_LEGACY_URL}{model_id}"
+            response = requests.post(legacy_url, headers=headers, json=payload, timeout=120)
 
         if response.status_code == 503:
-            return jsonify({'error': 'Model is loading, try again in a few seconds'}), 503
+            return jsonify({'error': f'Model {model_id} is currently loading on Hugging Face, please retry in 15 seconds'}), 503
 
         if response.status_code != 200:
             try:
-                err = response.json().get('error', 'Generation failed')
+                err_text = response.json().get('error', f'Generation failed (status {response.status_code})')
             except Exception:
-                err = 'Generation failed'
-            return jsonify({'error': err}), response.status_code
+                err_text = response.text[:300] if response.text else f'Generation failed (status {response.status_code})'
+            return jsonify({'error': err_text}), response.status_code
 
         image_base64 = base64.b64encode(response.content).decode('utf-8')
         deduct_credits(user['id'], 1)
-        return jsonify({'success': True, 'image': image_base64})
+        return jsonify({
+            'success': True,
+            'image': image_base64,
+            'model': model_key
+        })
 
     except requests.exceptions.Timeout:
-        return jsonify({'error': 'Request timed out'}), 504
+        return jsonify({'error': 'Request timed out — Hugging Face servers may be busy'}), 504
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -499,61 +560,82 @@ def generate_kaggle():
 
 @app.route('/api/civitai/search', methods=['GET'])
 def search_civitai():
-    """Search Civitai for models"""
+    """Search Civitai for models with base architecture filter (Flux, SDXL, Illustrious, Pony, SD 1.5)"""
     try:
-        query = request.args.get('query', '')
-        model_type = request.args.get('type', '')
+        query = request.args.get('query', '').strip()
+        model_type = request.args.get('type', '').strip()
+        base_model = request.args.get('base_model', '').strip()
+        sort = request.args.get('sort', 'Highest Rated').strip()
 
         params = {
-            'limit': 20,
-            'sort': 'Highest Rated',
+            'limit': 24,
+            'sort': sort or 'Highest Rated',
         }
         if query:
             params['query'] = query
+        if model_type:
+            params['types'] = model_type
+        if base_model and base_model.lower() not in ('all', ''):
+            params['baseModels'] = base_model
 
-        response = requests.get(
-            'https://civitai.red/api/v1/models',
-            params=params,
-            timeout=15
-        )
+        headers = {
+            'User-Agent': 'AbiArt-Studio/2.0'
+        }
+        civitai_token = os.environ.get('CIVITAI_TOKEN', '').strip()
+        if civitai_token:
+            headers['Authorization'] = f'Bearer {civitai_token}'
 
-        if response.status_code == 200:
+        # Try official civitai.com first, fallback to civitai.red mirror
+        response = None
+        for base_url in ('https://civitai.com/api/v1/models', 'https://civitai.red/api/v1/models'):
+            try:
+                r = requests.get(base_url, params=params, headers=headers, timeout=12)
+                if r.status_code == 200:
+                    response = r
+                    break
+            except Exception as req_err:
+                print(f"[Civitai] Search attempt on {base_url} failed: {req_err}")
+
+        if response and response.status_code == 200:
             data = response.json()
             models = []
 
             for item in data.get('items', []):
                 item_type = item.get('type', '')
-                
+
                 if model_type:
                     if model_type == 'Checkpoint' and item_type != 'Checkpoint':
                         continue
                     if model_type == 'LORA' and item_type != 'LORA':
                         continue
-                
+
                 version = item.get('modelVersions', [{}])[0]
+                version_base_model = version.get('baseModel', '')
                 files = version.get('files', [{}])
                 primary_file = files[0] if files else {}
                 images = version.get('images', [{}])
                 image_url = images[0].get('url', '') if images else ''
 
                 raw_download_url = primary_file.get('downloadUrl', '')
-                if 'civitai.com' in raw_download_url:
-                    raw_download_url = raw_download_url.replace('civitai.com', 'civitai.red')
 
+                stats = item.get('stats', {})
                 models.append({
                     'id': item.get('id'),
                     'name': item.get('name'),
                     'type': item_type,
+                    'base_model': version_base_model,
                     'version': version.get('name'),
                     'image': image_url,
                     'download_url': raw_download_url,
                     'filename': primary_file.get('name', 'model.safetensors'),
-                    'trained_words': version.get('trainedWords', [])
+                    'trained_words': version.get('trainedWords', []),
+                    'downloads': stats.get('downloadCount', 0),
+                    'rating': round(stats.get('rating', 0.0), 1)
                 })
 
             return jsonify({'models': models})
         else:
-            return jsonify({'error': 'Civitai search failed'}), 500
+            return jsonify({'error': 'Civitai search could not be completed'}), 502
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1032,6 +1114,315 @@ Rules:
         print(f"[Tools] Char-to-prompt error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+# ===============================
+# MODERN IMAGE PROCESSING ROUTES
+# ===============================
+
+@app.route('/api/models/info', methods=['GET'])
+def get_models_info():
+    """Return all available models across backends with recommended parameters"""
+    return jsonify({
+        'huggingface': [
+            {
+                'id': 'flux-schnell',
+                'name': 'FLUX.1 [schnell] ⚡ (4-Step SOTA)',
+                'architecture': 'Flux.1 D',
+                'default_steps': 4,
+                'default_cfg': 0.0,
+                'supports_negative': False,
+                'description': 'Ultra-fast, state-of-the-art prompt adherence, hands & readable text'
+            },
+            {
+                'id': 'flux-dev',
+                'name': 'FLUX.1 [dev] 💎 (High Quality)',
+                'architecture': 'Flux.1 D',
+                'default_steps': 28,
+                'default_cfg': 3.5,
+                'supports_negative': False,
+                'description': 'Maximum quality, photorealism and typographic mastery'
+            },
+            {
+                'id': 'sdxl-lightning',
+                'name': 'SDXL Lightning ⚡ (4-Step)',
+                'architecture': 'SDXL 1.0',
+                'default_steps': 4,
+                'default_cfg': 1.0,
+                'supports_negative': True,
+                'description': 'Lightning-fast generation with SDXL aesthetics'
+            },
+            {
+                'id': 'illustrious',
+                'name': 'Illustrious-XL 🎨 (Anime/Manga SOTA)',
+                'architecture': 'Illustrious',
+                'default_steps': 25,
+                'default_cfg': 6.5,
+                'supports_negative': True,
+                'description': 'Current gold standard for anime, manga and illustrated styles'
+            },
+            {
+                'id': 'animagine-xl',
+                'name': 'Animagine XL 3.1 ✨ (Anime Art)',
+                'architecture': 'SDXL 1.0',
+                'default_steps': 28,
+                'default_cfg': 7.0,
+                'supports_negative': True,
+                'description': 'Versatile anime model with high detail'
+            },
+            {
+                'id': 'sd3.5-large',
+                'name': 'Stable Diffusion 3.5 Large (8B)',
+                'architecture': 'SD 3.5',
+                'default_steps': 28,
+                'default_cfg': 4.5,
+                'supports_negative': True,
+                'description': 'Stability AI 8B model with strong composition'
+            },
+            {
+                'id': 'sdxl',
+                'name': 'SDXL Base 1.0',
+                'architecture': 'SDXL 1.0',
+                'default_steps': 25,
+                'default_cfg': 7.0,
+                'supports_negative': True,
+                'description': 'Classic SDXL base checkpoint'
+            },
+            {
+                'id': 'dreamshaper',
+                'name': 'DreamShaper XL',
+                'architecture': 'SDXL 1.0',
+                'default_steps': 25,
+                'default_cfg': 7.0,
+                'supports_negative': True,
+                'description': 'Artistic, painted, cinematic and versatile'
+            },
+            {
+                'id': 'sd15',
+                'name': 'Stable Diffusion 1.5 (Classic)',
+                'architecture': 'SD 1.5',
+                'default_steps': 20,
+                'default_cfg': 7.5,
+                'supports_negative': True,
+                'description': 'Original lightweight 512x512 model'
+            }
+        ],
+        'civitai_architectures': [
+            'All',
+            'Flux.1 D',
+            'SDXL 1.0',
+            'Illustrious',
+            'Pony',
+            'SD 1.5'
+        ]
+    })
+
+
+@app.route('/api/tools/upscale', methods=['POST'])
+def tool_upscale():
+    """Upscale an image (2x or 4x) using Modal A1111 Extra Single Image or enhanced Lanczos with unsharp mask"""
+    try:
+        data = request.json or {}
+        image_b64 = data.get('image', '')
+        scale = float(data.get('scale', 2.0))
+        face_restore = bool(data.get('face_restore', False))
+
+        if not image_b64:
+            return jsonify({'error': 'No image provided'}), 400
+
+        if ',' in image_b64:
+            image_b64 = image_b64.split(',', 1)[1]
+
+        # 1. Try Modal upscale endpoint if configured
+        if MODAL_UPSCALE_URL and 'YOUR_USERNAME' not in MODAL_UPSCALE_URL:
+            try:
+                modal_payload = {
+                    "image": image_b64,
+                    "upscaling_resize": scale,
+                    "upscaler_1": "R-ESRGAN 4x+",
+                    "gfpgan_visibility": 0.8 if face_restore else 0.0,
+                }
+                m_resp = requests.post(MODAL_UPSCALE_URL, json=modal_payload, timeout=120)
+                if m_resp.status_code == 200:
+                    res_data = m_resp.json()
+                    if 'image' in res_data:
+                        return jsonify({
+                            'success': True,
+                            'image': res_data['image'],
+                            'source': 'modal_esrgan',
+                            'scale': scale
+                        })
+            except Exception as m_err:
+                print(f"[Upscale] Modal upscale attempt failed, using fallback: {m_err}")
+
+        # 2. High-quality local Pillow Upscale (Lanczos + Unsharp Mask)
+        raw_bytes = base64.b64decode(image_b64)
+        img = Image.open(io.BytesIO(raw_bytes))
+        orig_w, orig_h = img.size
+        new_w = max(16, int(orig_w * scale))
+        new_h = max(16, int(orig_h * scale))
+
+        # Lanczos high quality interpolation
+        upscaled = img.resize((new_w, new_h), resample=Image.Resampling.LANCZOS)
+        # Apply gentle unsharp mask for edge definition
+        enhanced = upscaled.filter(ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=3))
+
+        buf = io.BytesIO()
+        enhanced.save(buf, format='PNG')
+        out_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        return jsonify({
+            'success': True,
+            'image': out_b64,
+            'source': 'lanczos_enhanced',
+            'scale': scale,
+            'width': new_w,
+            'height': new_h
+        })
+
+    except Exception as e:
+        print(f"[Upscale] Error: {e}")
+        return jsonify({'error': f'Upscaling failed: {str(e)}'}), 500
+
+
+@app.route('/api/tools/remove-bg', methods=['POST'])
+def tool_remove_bg():
+    """Remove background from image using SOTA RMBG model via Hugging Face inference router"""
+    try:
+        data = request.json or {}
+        image_b64 = data.get('image', '')
+        if not image_b64:
+            return jsonify({'error': 'No image provided'}), 400
+
+        if ',' in image_b64:
+            image_b64 = image_b64.split(',', 1)[1]
+
+        token = data.get('api_key', '').strip() or HF_TOKEN
+        if not token:
+            return jsonify({
+                'error': 'Hugging Face API token required for background removal. Set HF_TOKEN in .env or provide your token.'
+            }), 400
+
+        raw_bytes = base64.b64decode(image_b64)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/octet-stream"
+        }
+
+        url = f"{HF_ROUTER_URL}{HF_RMBG_MODEL}"
+        resp = requests.post(url, headers=headers, data=raw_bytes, timeout=45)
+
+        if resp.status_code == 503:
+            return jsonify({'error': 'RMBG model is loading on Hugging Face, please retry in 15 seconds'}), 503
+
+        if resp.status_code != 200:
+            err_msg = 'Background removal failed'
+            try:
+                err_msg = resp.json().get('error', err_msg)
+            except Exception:
+                pass
+            return jsonify({'error': f"{err_msg} (status {resp.status_code})"}), resp.status_code
+
+        out_b64 = base64.b64encode(resp.content).decode('utf-8')
+        return jsonify({'success': True, 'image': out_b64})
+
+    except Exception as e:
+        print(f"[RemoveBG] Error: {e}")
+        return jsonify({'error': f'Background removal failed: {str(e)}'}), 500
+
+
+@app.route('/api/tools/describe-image', methods=['POST'])
+def tool_describe_image():
+    """Generate detailed natural language image description (Vision-to-Prompt) for Flux & SDXL"""
+    try:
+        data = request.json or {}
+        image_b64 = data.get('image', '')
+        if not image_b64:
+            return jsonify({'error': 'No image provided'}), 400
+
+        if ',' in image_b64:
+            image_b64 = image_b64.split(',', 1)[1]
+
+        token = data.get('api_key', '').strip() or HF_TOKEN
+        if not token:
+            return jsonify({'error': 'Hugging Face token required for image description'}), 400
+
+        raw_bytes = base64.b64decode(image_b64)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/octet-stream"
+        }
+
+        url = f"{HF_ROUTER_URL}{HF_CAPTION_MODEL}"
+        resp = requests.post(url, headers=headers, data=raw_bytes, timeout=45)
+
+        if resp.status_code == 200:
+            res = resp.json()
+            caption = ''
+            if isinstance(res, list) and len(res) > 0:
+                caption = res[0].get('generated_text', '')
+            elif isinstance(res, dict):
+                caption = res.get('generated_text', '')
+
+            enhanced_prompt = f"A professional photograph of {caption}, cinematic lighting, 8k resolution, photorealistic, intricate details" if caption else ""
+            return jsonify({
+                'success': True,
+                'caption': caption,
+                'prompt': enhanced_prompt or caption
+            })
+        else:
+            return jsonify({'error': f'Vision description failed (status {resp.status_code})'}), resp.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/modal/img2img', methods=['POST'])
+def modal_img2img():
+    """Img2Img generation via Modal backend"""
+    try:
+        data = request.json or {}
+        user, err = check_credits(1)
+        if err:
+            return err
+
+        prompt = data.get('prompt', '').strip()
+        init_image = data.get('init_image', '')
+        denoising_strength = float(data.get('denoising_strength', 0.6))
+        steps = int(data.get('steps', 25))
+        cfg_scale = float(data.get('cfg_scale', 7.0))
+        model = data.get('model', '')
+
+        if not prompt or not init_image:
+            return jsonify({'error': 'Prompt and reference image are required'}), 400
+
+        if not MODAL_IMG2IMG_URL or 'YOUR_USERNAME' in MODAL_IMG2IMG_URL:
+            return jsonify({'error': 'MODAL_IMG2IMG_URL is not configured in .env'}), 400
+
+        if ',' in init_image:
+            init_image = init_image.split(',', 1)[1]
+
+        payload = {
+            "prompt": prompt,
+            "negative_prompt": data.get('negative_prompt', ''),
+            "init_images": [init_image],
+            "denoising_strength": denoising_strength,
+            "steps": steps,
+            "cfg_scale": cfg_scale,
+            "model": model,
+            "sampler_name": data.get('scheduler', 'Euler'),
+        }
+
+        resp = requests.post(MODAL_IMG2IMG_URL, json=payload, timeout=300)
+        if resp.status_code == 200:
+            res = resp.json()
+            if 'image' in res or 'images' in res:
+                img_out = res.get('image') or res['images'][0]
+                deduct_credits(user['id'], 1)
+                return jsonify({'success': True, 'image': img_out})
+            return jsonify({'error': 'No image in Modal response'}), 500
+        else:
+            return jsonify({'error': f'Modal error: {resp.text[:300]}'}), resp.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ===============================

@@ -597,6 +597,83 @@ class StableDiffusion:
             return {"error": str(e)}
 
     @modal.web_endpoint(method="POST")
+    def api_img2img(self, data: dict):
+        """Generate an image via A1111's img2img API"""
+        import requests
+        import json
+
+        try:
+            if not self.ready:
+                return {"error": "A1111 is still starting up, please wait"}
+
+            prompt = data.get("prompt", "")
+            negative_prompt = data.get("negative_prompt", "")
+            init_images = data.get("init_images", [])
+            denoising_strength = float(data.get("denoising_strength", 0.6))
+            steps = int(data.get("steps", 25))
+            cfg = float(data.get("cfg_scale", 7))
+            sampler_name = data.get("sampler_name", "Euler")
+            model = data.get("model", "")
+
+            if not prompt or not init_images:
+                return {"error": "Prompt and init_images are required"}
+
+            payload = {
+                "prompt": prompt,
+                "negative_prompt": negative_prompt,
+                "init_images": init_images,
+                "denoising_strength": denoising_strength,
+                "steps": steps,
+                "cfg_scale": cfg,
+                "sampler_name": sampler_name,
+            }
+            if model and model != "default" and model != "SDXL Base 1.0":
+                payload["override_settings"] = {"sd_model_checkpoint": model}
+
+            r = requests.post(f"{self.a1111_url}/sdapi/v1/img2img", json=payload, timeout=300)
+            if r.status_code == 200:
+                result = r.json()
+                images = result.get("images", [])
+                if images:
+                    return {"image": images[0], "images": images}
+                return {"error": "No image in response"}
+            return {"error": f"A1111 img2img error: {r.text[:300]}"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    @modal.web_endpoint(method="POST")
+    def api_upscale(self, data: dict):
+        """Upscale an image via A1111's extra-single-image API"""
+        import requests
+
+        try:
+            if not self.ready:
+                return {"error": "A1111 is still starting up, please wait"}
+
+            image = data.get("image", "")
+            upscaling_resize = float(data.get("upscaling_resize", 2.0))
+            upscaler = data.get("upscaler_1", "R-ESRGAN 4x+")
+            gfpgan = float(data.get("gfpgan_visibility", 0.0))
+
+            if not image:
+                return {"error": "No image provided"}
+
+            payload = {
+                "image": image,
+                "upscaling_resize": upscaling_resize,
+                "upscaler_1": upscaler,
+                "gfpgan_visibility": gfpgan,
+            }
+
+            r = requests.post(f"{self.a1111_url}/sdapi/v1/extra-single-image", json=payload, timeout=180)
+            if r.status_code == 200:
+                result = r.json()
+                return {"image": result.get("image", "")}
+            return {"error": f"A1111 upscale error: {r.text[:300]}"}
+        except Exception as e:
+            return {"error": str(e)}
+
+    @modal.web_endpoint(method="POST")
     def load_civitai_model(self, data: dict):
         """Download a model/LoRA/VAE from Civitai"""
         import os

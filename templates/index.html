@@ -150,9 +150,17 @@
                 </div>
                 <button class="tools-close" onclick="closeTools()"><i class="fas fa-times"></i></button>
             </div>
-            <div class="tools-tabs">
-                <button class="tool-tab active" data-tool="tagger" onclick="switchTool('tagger')"><i
-                        class="fas fa-tags"></i> Image → Tags</button>
+            <div class="tools-tabs" style="flex-wrap:wrap;overflow-x:auto">
+                <button class="tool-tab active" data-tool="upscale" onclick="switchTool('upscale')"><i
+                        class="fas fa-expand-arrows-alt"></i> Upscale</button>
+                <button class="tool-tab" data-tool="removebg" onclick="switchTool('removebg')"><i
+                        class="fas fa-cut"></i> Remove BG</button>
+                <button class="tool-tab" data-tool="vision" onclick="switchTool('vision')"><i
+                        class="fas fa-eye"></i> Vision Prompt</button>
+                <button class="tool-tab" data-tool="img2img" onclick="switchTool('img2img')"><i
+                        class="fas fa-magic"></i> Img2Img</button>
+                <button class="tool-tab" data-tool="tagger" onclick="switchTool('tagger')"><i
+                        class="fas fa-tags"></i> Tagger</button>
                 <button class="tool-tab" data-tool="metadata" onclick="switchTool('metadata')"><i
                         class="fas fa-file-alt"></i> Metadata</button>
                 <button class="tool-tab" data-tool="weights" onclick="switchTool('weights')"><i
@@ -162,8 +170,150 @@
             </div>
             <div class="tools-body">
 
+                <!-- Tool: Super-Resolution / Upscale -->
+                <div id="tool_upscale" class="tool-panel" style="display:block">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Upscale any image to 2x or 4x high-resolution with edge sharpening and optional face restoration (GFPGAN).</p>
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+                        <button type="button" class="btn btn-sm" onclick="loadCurrentImageToTool('upscale')" style="flex:1">
+                            <i class="fas fa-magic"></i> Use Last Generated Image
+                        </button>
+                    </div>
+                    <div class="tool-drop-zone" id="upscaleDropZone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Drop image or click to upload</p>
+                        <input type="file" id="upscaleFileInput" accept="image/*" hidden>
+                    </div>
+                    <div id="upscalePreview" style="display:none;text-align:center;margin:.75rem 0">
+                        <img id="upscalePreviewImg" style="max-height:180px;max-width:100%;border:1px solid var(--dim);border-radius:6px">
+                    </div>
+                    <div style="display:flex;gap:1rem;align-items:center;margin:.75rem 0;flex-wrap:wrap">
+                        <div style="display:flex;align-items:center;gap:.4rem">
+                            <label style="font-size:.7rem;color:var(--muted)">Scale:</label>
+                            <button type="button" class="btn btn-sm active" id="btnScale2x" onclick="selectUpscaleFactor(2)" style="border-color:var(--accent)">2x</button>
+                            <button type="button" class="btn btn-sm" id="btnScale4x" onclick="selectUpscaleFactor(4)">4x</button>
+                        </div>
+                        <label style="display:flex;align-items:center;gap:.35rem;font-size:.7rem;cursor:pointer">
+                            <input type="checkbox" id="upscaleFaceRestore" checked> Restore Faces (GFPGAN)
+                        </label>
+                    </div>
+                    <button type="button" class="btn-accent" onclick="runUpscaleTool()" id="upscaleBtn" style="margin:.5rem 0;width:100%">
+                        <i class="fas fa-expand-arrows-alt"></i> Upscale Image
+                    </button>
+                    <div id="upscaleResult" style="display:none;margin-top:.75rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                            <span style="font-size:.8rem;color:var(--success)"><i class="fas fa-check-circle"></i> Upscaled Successfully!</span>
+                            <button type="button" class="btn btn-sm" onclick="downloadUpscaledResult()"><i class="fas fa-download"></i> Download</button>
+                        </div>
+                        <div style="text-align:center">
+                            <img id="upscaleResultImg" style="max-height:240px;max-width:100%;border:1px solid var(--accent);border-radius:6px">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tool: Background Removal -->
+                <div id="tool_removebg" class="tool-panel" style="display:none">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Remove background automatically in 1 click using RMBG-1.4 AI. Generates a transparent PNG.</p>
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+                        <button type="button" class="btn btn-sm" onclick="loadCurrentImageToTool('removebg')" style="flex:1">
+                            <i class="fas fa-magic"></i> Use Last Generated Image
+                        </button>
+                    </div>
+                    <div class="tool-drop-zone" id="removebgDropZone">
+                        <i class="fas fa-cut"></i>
+                        <p>Drop image or click to upload</p>
+                        <input type="file" id="removebgFileInput" accept="image/*" hidden>
+                    </div>
+                    <div id="removebgPreview" style="display:none;text-align:center;margin:.75rem 0">
+                        <img id="removebgPreviewImg" style="max-height:180px;max-width:100%;border:1px solid var(--dim);border-radius:6px">
+                    </div>
+                    <button type="button" class="btn-accent" onclick="runRemoveBgTool()" id="removebgBtn" style="margin:.5rem 0;width:100%">
+                        <i class="fas fa-cut"></i> Remove Background Now
+                    </button>
+                    <div id="removebgResult" style="display:none;margin-top:.75rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                            <span style="font-size:.8rem;color:var(--success)"><i class="fas fa-check-circle"></i> Transparent PNG Ready!</span>
+                            <button type="button" class="btn btn-sm" onclick="downloadRemoveBgResult()"><i class="fas fa-download"></i> Download PNG</button>
+                        </div>
+                        <div style="text-align:center;background:repeating-conic-gradient(#222 0% 25%, #151518 0% 50%) 50% / 16px 16px;border-radius:6px;padding:.5rem;border:1px solid var(--border)">
+                            <img id="removebgResultImg" style="max-height:240px;max-width:100%">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tool: Vision → Prompt -->
+                <div id="tool_vision" class="tool-panel" style="display:none">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Inspect any image with AI Vision to generate a rich, natural language prompt ideal for FLUX.1 or SDXL.</p>
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+                        <button type="button" class="btn btn-sm" onclick="loadCurrentImageToTool('vision')" style="flex:1">
+                            <i class="fas fa-magic"></i> Use Last Generated Image
+                        </button>
+                    </div>
+                    <div class="tool-drop-zone" id="visionDropZone">
+                        <i class="fas fa-eye"></i>
+                        <p>Drop image or click to upload</p>
+                        <input type="file" id="visionFileInput" accept="image/*" hidden>
+                    </div>
+                    <div id="visionPreview" style="display:none;text-align:center;margin:.75rem 0">
+                        <img id="visionPreviewImg" style="max-height:180px;max-width:100%;border:1px solid var(--dim);border-radius:6px">
+                    </div>
+                    <button type="button" class="btn-accent" onclick="runVisionTool()" id="visionBtn" style="margin:.5rem 0;width:100%">
+                        <i class="fas fa-search"></i> Inspect Image & Generate Prompt
+                    </button>
+                    <div id="visionResult" style="display:none;margin-top:.75rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+                            <label style="font-size:.7rem;color:var(--accent2)">Generated Descriptive Prompt</label>
+                            <div style="display:flex;gap:.3rem">
+                                <button type="button" class="btn btn-sm" onclick="copyVisionPrompt()"><i class="fas fa-copy"></i> Copy</button>
+                                <button type="button" class="btn btn-sm" onclick="sendVisionToPrompt()" style="border-color:var(--accent)"><i class="fas fa-arrow-right"></i> Send to Prompt</button>
+                            </div>
+                        </div>
+                        <textarea id="visionResultText" rows="4" style="width:100%;font-size:.75rem" readonly></textarea>
+                    </div>
+                </div>
+
+                <!-- Tool: Img2Img Studio -->
+                <div id="tool_img2img" class="tool-panel" style="display:none">
+                    <p class="tool-desc"><i class="fas fa-info-circle"></i> Transform an existing image. Lower Denoising keeps structure intact, higher values give AI creative freedom.</p>
+                    <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+                        <button type="button" class="btn btn-sm" onclick="loadCurrentImageToTool('img2img')" style="flex:1">
+                            <i class="fas fa-magic"></i> Use Last Generated Image
+                        </button>
+                    </div>
+                    <div class="tool-drop-zone" id="img2imgDropZone">
+                        <i class="fas fa-image"></i>
+                        <p>Drop reference image</p>
+                        <input type="file" id="img2imgFileInput" accept="image/*" hidden>
+                    </div>
+                    <div id="img2imgPreview" style="display:none;text-align:center;margin:.75rem 0">
+                        <img id="img2imgPreviewImg" style="max-height:180px;max-width:100%;border:1px solid var(--dim);border-radius:6px">
+                    </div>
+                    <div style="margin:.5rem 0">
+                        <label style="font-size:.7rem;color:var(--muted);display:flex;justify-content:space-between">
+                            Denoising Strength: <span id="img2imgDenoiseVal" style="color:var(--accent2)">0.60</span>
+                        </label>
+                        <input type="range" id="img2imgDenoise" min="0.1" max="0.95" step="0.05" value="0.6" style="width:100%"
+                            oninput="document.getElementById('img2imgDenoiseVal').textContent=parseFloat(this.value).toFixed(2)">
+                    </div>
+                    <div style="margin:.5rem 0">
+                        <label style="font-size:.7rem;color:var(--muted)">Transformation Prompt:</label>
+                        <textarea id="img2imgPrompt" rows="3" placeholder="Describe how to modify the image..."></textarea>
+                    </div>
+                    <button type="button" class="btn-accent" onclick="runImg2ImgTool()" id="img2imgBtn" style="margin:.5rem 0;width:100%">
+                        <i class="fas fa-magic"></i> Generate Variation
+                    </button>
+                    <div id="img2imgResult" style="display:none;margin-top:.75rem">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+                            <span style="font-size:.8rem;color:var(--success)"><i class="fas fa-check-circle"></i> Variation Complete!</span>
+                            <button type="button" class="btn btn-sm" onclick="downloadImg2ImgResult()"><i class="fas fa-download"></i> Download</button>
+                        </div>
+                        <div style="text-align:center">
+                            <img id="img2imgResultImg" style="max-height:240px;max-width:100%;border:1px solid var(--accent);border-radius:6px">
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tool 1: Image Tagger -->
-                <div id="tool_tagger" class="tool-panel">
+                <div id="tool_tagger" class="tool-panel" style="display:none">
                     <p class="tool-desc"><i class="fas fa-info-circle"></i> Upload an image to generate Danbooru-style
                         tags using WD Tagger AI. Tags are compatible with A1111/Forge prompts.</p>
                     <div class="tool-drop-zone" id="taggerDropZone">
@@ -395,26 +545,40 @@
                         <div class="sb-body">
                             <div class="field">
                                 <label class="field-label">Model</label>
-                                <select id="hfModel">
-                                    <option value="sdxl">Stable Diffusion XL</option>
-                                    <option value="sdxl-turbo">SDXL Turbo (Fast)</option>
-                                    <option value="dreamshaper">DreamShaper 8</option>
-                                    <option value="sd15">SD 1.5</option>
+                                <select id="hfModel" onchange="onHfModelChange()">
+                                    <option value="flux-schnell" selected>⚡ FLUX.1 [schnell] (4-Step SOTA)</option>
+                                    <option value="flux-dev">💎 FLUX.1 [dev] (Max Quality)</option>
+                                    <option value="sdxl-lightning">⚡ SDXL Lightning (4-Step Fast)</option>
+                                    <option value="illustrious">🎨 Illustrious-XL (Anime SOTA)</option>
+                                    <option value="animagine-xl">✨ Animagine XL 3.1</option>
+                                    <option value="sd3.5-large">🚀 SD 3.5 Large (8B)</option>
+                                    <option value="sdxl">Stable Diffusion XL Base</option>
+                                    <option value="dreamshaper">DreamShaper XL</option>
+                                    <option value="sd15">SD 1.5 (Classic 512px)</option>
                                 </select>
+                                <div id="hfModelNotice" style="font-size:.65rem;color:var(--accent2);margin-top:.25rem;line-height:1.3">
+                                    <i class="fas fa-bolt"></i> <strong>FLUX.1 Schnell</strong> : 4 steps ultra-rapides, prompt naturel, texte lisible.
+                                </div>
+                            </div>
+                            <div class="field" id="hfStepsField">
+                                <label class="field-label">Steps <input type="number" class="field-val-input"
+                                        id="hfStepsVal" value="4" min="1" max="50" step="1"></label>
+                                <input type="range" id="hfSteps" min="1" max="50" step="1" value="4"
+                                    oninput="document.getElementById('hfStepsVal').value=this.value">
+                            </div>
+                            <div class="field" id="hfGuidanceField">
+                                <label class="field-label">Guidance / CFG <input type="number" class="field-val-input"
+                                        id="hfGuidanceVal" value="0.0" min="0" max="20" step="0.1"></label>
+                                <input type="range" id="hfGuidance" min="0" max="20" step="0.1" value="0.0">
                             </div>
                             <div class="field">
-                                <label class="field-label">Guidance <input type="number" class="field-val-input"
-                                        id="hfGuidanceVal" value="7.5" min="1" max="20" step="0.1"></label>
-                                <input type="range" id="hfGuidance" min="1" max="20" step="0.1" value="7.5">
-                            </div>
-                            <div class="field">
-                                <label class="field-label">API Key</label>
+                                <label class="field-label">API Key <span style="font-size:.6rem;color:var(--muted)">(Optional if set in .env)</span></label>
                                 <div class="row">
-                                    <input type="text" id="hfApiKey" placeholder="Hugging Face token" style="flex:1">
+                                    <input type="password" id="hfApiKey" placeholder="Hugging Face token (hf_...)" style="flex:1">
                                     <button class="btn btn-sm" onclick="saveHfKey()">Save</button>
                                 </div>
                                 <a href="https://huggingface.co/settings/tokens" target="_blank"
-                                    style="font-size:.65rem">Get free token →</a>
+                                    style="font-size:.65rem;color:var(--accent2)">Get free HF token →</a>
                             </div>
                         </div>
                     </details>
@@ -873,6 +1037,23 @@
                                     <button class="btn btn-sm" style="flex:1" data-tab="loras"
                                         onclick="switchModelTab('loras')">LoRAs</button>
                                 </div>
+                                <div class="row" style="margin-bottom:.4rem;gap:.3rem">
+                                    <select id="civitaiBaseModel" onchange="searchCivitai()"
+                                        style="flex:1;font-size:.68rem;padding:.2rem .4rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px">
+                                        <option value="All">All Architectures</option>
+                                        <option value="Flux.1 D">⚡ Flux.1 D</option>
+                                        <option value="SDXL 1.0">SDXL 1.0</option>
+                                        <option value="Illustrious">🎨 Illustrious</option>
+                                        <option value="Pony">🦄 Pony</option>
+                                        <option value="SD 1.5">SD 1.5</option>
+                                    </select>
+                                    <select id="civitaiSort" onchange="searchCivitai()"
+                                        style="font-size:.68rem;padding:.2rem .4rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px">
+                                        <option value="Highest Rated">Top Rated</option>
+                                        <option value="Most Downloaded">Popular</option>
+                                        <option value="Newest">Newest</option>
+                                    </select>
+                                </div>
                                 <div class="model-grid" id="modelGrid">
                                     <p style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.7rem">
                                         Search for models above</p>
@@ -1209,18 +1390,28 @@
         async function searchCivitai() {
             const query = document.getElementById('civitaiSearch').value.trim();
             const type = currentModelTab === 'checkpoints' ? 'Checkpoint' : 'LORA';
+            const baseModelEl = document.getElementById('civitaiBaseModel');
+            const baseModel = baseModelEl ? baseModelEl.value : 'All';
+            const sortEl = document.getElementById('civitaiSort');
+            const sort = sortEl ? sortEl.value : 'Highest Rated';
             const grid = document.getElementById('modelGrid');
-            grid.innerHTML = '<p style="grid-column:1/-1;text-align:center"><i class="fas fa-spinner fa-spin"></i> Searching...</p>';
+            grid.innerHTML = '<p style="grid-column:1/-1;text-align:center"><i class="fas fa-spinner fa-spin"></i> Searching Civitai...</p>';
             try {
-                const response = await fetch(`/api/civitai/search?query=${encodeURIComponent(query)}&type=${type}`);
+                const response = await fetch(`/api/civitai/search?query=${encodeURIComponent(query)}&type=${type}&base_model=${encodeURIComponent(baseModel)}&sort=${encodeURIComponent(sort)}`);
                 const data = await response.json();
                 if (data.models && data.models.length > 0) {
                     grid.innerHTML = data.models.map(m => `
                     <div class="model-card" onclick="selectCivitaiModel(${JSON.stringify(m).replace(/"/g, '&quot;')})">
-                        <img src="${m.image || 'https://via.placeholder.com/150?text=No+Image'}" alt="${m.name}">
-                        <div class="model-info"><div class="model-name">${m.name}</div><div class="model-type">${m.type}</div></div>
+                        <img src="${m.image || 'https://via.placeholder.com/150?text=No+Image'}" alt="${m.name}" loading="lazy">
+                        <div class="model-info">
+                            <div class="model-name" title="${m.name}">${m.name}</div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
+                                <span class="model-type">${m.type}</span>
+                                ${m.base_model ? `<span style="font-size:.6rem;background:var(--card);border:1px solid var(--border);padding:1px 4px;border-radius:4px;color:var(--accent2)">${m.base_model}</span>` : ''}
+                            </div>
+                        </div>
                     </div>`).join('');
-                } else { grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.7rem">No models found</p>'; }
+                } else { grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.7rem">No models found for this architecture</p>'; }
             } catch (e) { grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--error)">Search failed</p>'; }
         }
 
@@ -1698,13 +1889,19 @@
                 let response;
                 let finalPrompt = prompt; // Will be overridden with trigger words for modal
                 if (currentBackend === 'huggingface') {
-                    const apiKey = localStorage.getItem('hf_api_key');
-                    if (!apiKey) throw new Error('Please enter your Hugging Face API key');
+                    const apiKey = localStorage.getItem('hf_api_key') || '';
+                    const hfModel = document.getElementById('hfModel').value;
+                    const hfSteps = parseInt(document.getElementById('hfSteps') ? document.getElementById('hfSteps').value : 4);
+                    const [width, height] = (document.getElementById('imgSize') ? document.getElementById('imgSize').value : '1024x1024').split('x').map(Number);
                     response = await fetch('/generate', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-                            prompt, negative_prompt: document.getElementById('negativePrompt').value,
-                            model: document.getElementById('hfModel').value,
+                            prompt,
+                            negative_prompt: document.getElementById('negativePrompt').value,
+                            model: hfModel,
                             guidance_scale: parseFloat(document.getElementById('hfGuidance').value),
+                            steps: hfSteps,
+                            width: width || 1024,
+                            height: height || 1024,
                             api_key: apiKey
                         })
                     });
@@ -1794,14 +1991,26 @@
                 const images = data.images || [data.image];
 
                 if (images.length === 1) {
-                    outputArea.innerHTML = `<img src="data:image/png;base64,${images[0]}" class="generated-image" id="genImage">
-                    <div class="image-actions"><button class="action-btn" onclick="downloadImage()" title="Download"><i class="fas fa-download"></i></button></div>`;
+                    outputArea.innerHTML = `<div style="position:relative;display:inline-block;width:100%">
+                        <img src="data:image/png;base64,${images[0]}" class="generated-image" id="genImage">
+                        <div class="image-actions" style="opacity:1;position:absolute;bottom:12px;right:12px;display:flex;gap:6px;background:rgba(10,10,15,0.85);backdrop-filter:blur(8px);padding:6px;border-radius:8px;border:1px solid var(--border)">
+                            <button class="action-btn" onclick="quickUpscale(0)" title="Super-Resolution 2x Upscale" style="padding:0 8px;width:auto;font-size:.7rem"><i class="fas fa-expand-arrows-alt"></i> 2x</button>
+                            <button class="action-btn" onclick="quickRemoveBg(0)" title="Remove Background (Transparent PNG)" style="padding:0 8px;width:auto;font-size:.7rem"><i class="fas fa-cut"></i> BG</button>
+                            <button class="action-btn" onclick="quickUseAsImg2Img(0)" title="Send to Img2Img Studio" style="padding:0 8px;width:auto;font-size:.7rem"><i class="fas fa-magic"></i> Img2Img</button>
+                            <button class="action-btn" onclick="quickDescribe(0)" title="Inspect Image with Vision AI" style="padding:0 8px;width:auto;font-size:.7rem"><i class="fas fa-eye"></i> Vision</button>
+                            <button class="action-btn" onclick="downloadImage()" title="Download Original PNG" style="width:32px;height:32px"><i class="fas fa-download"></i></button>
+                        </div>
+                    </div>`;
                 } else {
                     let g = '<div style="display:grid;grid-template-columns:repeat(' + Math.min(images.length, 2) + ',1fr);gap:.75rem;width:100%">';
                     images.forEach((img, idx) => {
                         g += `<div style="position:relative;cursor:pointer" onclick="expandGalleryImage(${idx})">
                         <img src="data:image/png;base64,${img}" style="width:100%;border:2px solid transparent;transition:.3s" onmouseover="this.style.borderColor='var(--text)'" onmouseout="this.style.borderColor='transparent'">
-                        <div style="position:absolute;top:8px;right:8px"><button class="action-btn" onclick="event.stopPropagation();downloadImageByData(${idx})" style="width:28px;height:28px;font-size:.7rem"><i class="fas fa-download"></i></button></div>
+                        <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px">
+                            <button class="action-btn" onclick="event.stopPropagation();quickUpscale(${idx})" title="2x Upscale" style="width:28px;height:28px;font-size:.65rem"><i class="fas fa-expand"></i></button>
+                            <button class="action-btn" onclick="event.stopPropagation();quickRemoveBg(${idx})" title="Remove BG" style="width:28px;height:28px;font-size:.65rem"><i class="fas fa-cut"></i></button>
+                            <button class="action-btn" onclick="event.stopPropagation();downloadImageByData(${idx})" title="Download" style="width:28px;height:28px;font-size:.65rem"><i class="fas fa-download"></i></button>
+                        </div>
                         <span style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.6);color:#fff;padding:2px 8px;font-size:.65rem">${idx + 1}/${images.length}</span>
                     </div>`;
                     });
@@ -2355,12 +2564,21 @@
         }
 
         // ========== TOOLS ==========
-        let currentTool = 'tagger';
+        let currentTool = 'upscale';
         let _taggerImageB64 = null;
         let _metadataParsed = null;
+        let _upscaleImageB64 = null;
+        let _upscaleFactor = 2;
+        let _upscaledResultB64 = null;
+        let _removebgImageB64 = null;
+        let _removebgResultB64 = null;
+        let _visionImageB64 = null;
+        let _img2imgImageB64 = null;
+        let _img2imgResultB64 = null;
 
-        function openTools() {
+        function openTools(defaultTab) {
             document.getElementById('toolsPanel').style.display = 'flex';
+            if (defaultTab) switchTool(defaultTab);
         }
         function closeTools() {
             document.getElementById('toolsPanel').style.display = 'none';
@@ -2368,9 +2586,353 @@
         function switchTool(name) {
             currentTool = name;
             document.querySelectorAll('.tool-tab').forEach(t => t.classList.remove('active'));
-            document.querySelector(`.tool-tab[data-tool="${name}"]`).classList.add('active');
+            const tabBtn = document.querySelector(`.tool-tab[data-tool="${name}"]`);
+            if (tabBtn) tabBtn.classList.add('active');
             document.querySelectorAll('.tool-panel').forEach(p => p.style.display = 'none');
-            document.getElementById('tool_' + name).style.display = 'block';
+            const targetPanel = document.getElementById('tool_' + name);
+            if (targetPanel) targetPanel.style.display = 'block';
+        }
+
+        function onHfModelChange() {
+            const model = document.getElementById('hfModel').value;
+            const noticeEl = document.getElementById('hfModelNotice');
+            const stepsInput = document.getElementById('hfSteps');
+            const stepsVal = document.getElementById('hfStepsVal');
+            const guidanceInput = document.getElementById('hfGuidance');
+            const guidanceVal = document.getElementById('hfGuidanceVal');
+
+            if (model === 'flux-schnell') {
+                if (noticeEl) noticeEl.innerHTML = '<i class="fas fa-bolt"></i> <strong>FLUX.1 Schnell</strong> : 4 steps ultra-rapides, prompt naturel, texte lisible.';
+                if (stepsInput) { stepsInput.value = 4; stepsVal.value = 4; }
+                if (guidanceInput) { guidanceInput.value = 0.0; guidanceVal.value = 0.0; }
+            } else if (model === 'flux-dev') {
+                if (noticeEl) noticeEl.innerHTML = '<i class="fas fa-gem"></i> <strong>FLUX.1 Dev</strong> : Qualité maximale, réalisme et détails exceptionnels (28 steps).';
+                if (stepsInput) { stepsInput.value = 28; stepsVal.value = 28; }
+                if (guidanceInput) { guidanceInput.value = 3.5; guidanceVal.value = 3.5; }
+            } else if (model === 'sdxl-lightning') {
+                if (noticeEl) noticeEl.innerHTML = '<i class="fas fa-bolt"></i> <strong>SDXL Lightning</strong> : 4 steps instantanés, style SDXL dynamique.';
+                if (stepsInput) { stepsInput.value = 4; stepsVal.value = 4; }
+                if (guidanceInput) { guidanceInput.value = 1.0; guidanceVal.value = 1.0; }
+            } else if (model === 'illustrious') {
+                if (noticeEl) noticeEl.innerHTML = '<i class="fas fa-paint-brush"></i> <strong>Illustrious-XL</strong> : SOTA mondial Anime, Manga et 2D.';
+                if (stepsInput) { stepsInput.value = 25; stepsVal.value = 25; }
+                if (guidanceInput) { guidanceInput.value = 6.5; guidanceVal.value = 6.5; }
+            } else if (model === 'animagine-xl') {
+                if (noticeEl) noticeEl.innerHTML = '<i class="fas fa-sparkles"></i> <strong>Animagine XL 3.1</strong> : Anime et illustrations détaillées.';
+                if (stepsInput) { stepsInput.value = 28; stepsVal.value = 28; }
+                if (guidanceInput) { guidanceInput.value = 7.0; guidanceVal.value = 7.0; }
+            } else if (model === 'sd3.5-large') {
+                if (noticeEl) noticeEl.innerHTML = '<i class="fas fa-rocket"></i> <strong>SD 3.5 Large (8B)</strong> : Composition complexe et haute fidélité.';
+                if (stepsInput) { stepsInput.value = 28; stepsVal.value = 28; }
+                if (guidanceInput) { guidanceInput.value = 4.5; guidanceVal.value = 4.5; }
+            } else {
+                if (noticeEl) noticeEl.innerHTML = '';
+                if (stepsInput) { stepsInput.value = 25; stepsVal.value = 25; }
+                if (guidanceInput) { guidanceInput.value = 7.5; guidanceVal.value = 7.5; }
+            }
+        }
+
+        function loadCurrentImageToTool(toolName, targetB64) {
+            let b64 = targetB64;
+            if (!b64) {
+                if (!currentImage) {
+                    showToast('No generated image available yet', 'warning');
+                    return false;
+                }
+                b64 = currentImage.includes(',') ? currentImage.split(',')[1] : currentImage;
+            }
+            const dataUrl = `data:image/png;base64,${b64}`;
+
+            if (toolName === 'upscale') {
+                _upscaleImageB64 = b64;
+                document.getElementById('upscalePreview').style.display = 'block';
+                document.getElementById('upscalePreviewImg').src = dataUrl;
+                document.getElementById('upscaleResult').style.display = 'none';
+            } else if (toolName === 'removebg') {
+                _removebgImageB64 = b64;
+                document.getElementById('removebgPreview').style.display = 'block';
+                document.getElementById('removebgPreviewImg').src = dataUrl;
+                document.getElementById('removebgResult').style.display = 'none';
+            } else if (toolName === 'vision') {
+                _visionImageB64 = b64;
+                document.getElementById('visionPreview').style.display = 'block';
+                document.getElementById('visionPreviewImg').src = dataUrl;
+                document.getElementById('visionResult').style.display = 'none';
+            } else if (toolName === 'img2img') {
+                _img2imgImageB64 = b64;
+                document.getElementById('img2imgPreview').style.display = 'block';
+                document.getElementById('img2imgPreviewImg').src = dataUrl;
+                document.getElementById('img2imgResult').style.display = 'none';
+            }
+            return true;
+        }
+
+        // --- Super-Resolution / Upscale ---
+        function initUpscaleDrop() {
+            const zone = document.getElementById('upscaleDropZone');
+            const inp = document.getElementById('upscaleFileInput');
+            if (!zone) return;
+            zone.onclick = () => inp.click();
+            zone.ondragover = e => { e.preventDefault(); zone.classList.add('drag-over'); };
+            zone.ondragleave = () => zone.classList.remove('drag-over');
+            zone.ondrop = e => {
+                e.preventDefault(); zone.classList.remove('drag-over');
+                if (e.dataTransfer.files[0]) loadUpscaleFile(e.dataTransfer.files[0]);
+            };
+            inp.onchange = e => { if (e.target.files[0]) loadUpscaleFile(e.target.files[0]); };
+        }
+        function loadUpscaleFile(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const b64 = e.target.result.split(',')[1];
+                _upscaleImageB64 = b64;
+                document.getElementById('upscalePreview').style.display = 'block';
+                document.getElementById('upscalePreviewImg').src = e.target.result;
+                document.getElementById('upscaleResult').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+        function selectUpscaleFactor(factor) {
+            _upscaleFactor = factor;
+            const b2 = document.getElementById('btnScale2x');
+            const b4 = document.getElementById('btnScale4x');
+            if (b2) { b2.classList.toggle('active', factor === 2); b2.style.borderColor = factor === 2 ? 'var(--accent)' : ''; }
+            if (b4) { b4.classList.toggle('active', factor === 4); b4.style.borderColor = factor === 4 ? 'var(--accent)' : ''; }
+        }
+        async function runUpscaleTool() {
+            if (!_upscaleImageB64) { showToast('Please upload or select an image first', 'warning'); return; }
+            const btn = document.getElementById('upscaleBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Upscaling...';
+            try {
+                const faceRestore = document.getElementById('upscaleFaceRestore').checked;
+                const resp = await fetch('/api/tools/upscale', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: _upscaleImageB64,
+                        scale: _upscaleFactor,
+                        face_restore: faceRestore
+                    })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                _upscaledResultB64 = data.image;
+                document.getElementById('upscaleResultImg').src = `data:image/png;base64,${data.image}`;
+                document.getElementById('upscaleResult').style.display = 'block';
+                showToast(`Upscaled ${_upscaleFactor}x successfully!`, 'success');
+            } catch (e) { showToast('Upscale: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-expand-arrows-alt"></i> Upscale Image'; }
+        }
+        function downloadUpscaledResult() {
+            if (!_upscaledResultB64) return;
+            const a = document.createElement('a');
+            a.href = `data:image/png;base64,${_upscaledResultB64}`;
+            a.download = `abiart_upscaled_${Date.now()}.png`;
+            a.click();
+        }
+
+        // --- Remove Background ---
+        function initRemoveBgDrop() {
+            const zone = document.getElementById('removebgDropZone');
+            const inp = document.getElementById('removebgFileInput');
+            if (!zone) return;
+            zone.onclick = () => inp.click();
+            zone.ondragover = e => { e.preventDefault(); zone.classList.add('drag-over'); };
+            zone.ondragleave = () => zone.classList.remove('drag-over');
+            zone.ondrop = e => {
+                e.preventDefault(); zone.classList.remove('drag-over');
+                if (e.dataTransfer.files[0]) loadRemoveBgFile(e.dataTransfer.files[0]);
+            };
+            inp.onchange = e => { if (e.target.files[0]) loadRemoveBgFile(e.target.files[0]); };
+        }
+        function loadRemoveBgFile(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const b64 = e.target.result.split(',')[1];
+                _removebgImageB64 = b64;
+                document.getElementById('removebgPreview').style.display = 'block';
+                document.getElementById('removebgPreviewImg').src = e.target.result;
+                document.getElementById('removebgResult').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+        async function runRemoveBgTool() {
+            if (!_removebgImageB64) { showToast('Please upload or select an image first', 'warning'); return; }
+            const btn = document.getElementById('removebgBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Removing Background...';
+            try {
+                const apiKey = localStorage.getItem('hf_api_key') || '';
+                const resp = await fetch('/api/tools/remove-bg', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: _removebgImageB64, api_key: apiKey })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                _removebgResultB64 = data.image;
+                document.getElementById('removebgResultImg').src = `data:image/png;base64,${data.image}`;
+                document.getElementById('removebgResult').style.display = 'block';
+                showToast('Background removed successfully!', 'success');
+            } catch (e) { showToast('Remove BG: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-cut"></i> Remove Background Now'; }
+        }
+        function downloadRemoveBgResult() {
+            if (!_removebgResultB64) return;
+            const a = document.createElement('a');
+            a.href = `data:image/png;base64,${_removebgResultB64}`;
+            a.download = `abiart_nobg_${Date.now()}.png`;
+            a.click();
+        }
+
+        // --- Vision → Prompt ---
+        function initVisionDrop() {
+            const zone = document.getElementById('visionDropZone');
+            const inp = document.getElementById('visionFileInput');
+            if (!zone) return;
+            zone.onclick = () => inp.click();
+            zone.ondragover = e => { e.preventDefault(); zone.classList.add('drag-over'); };
+            zone.ondragleave = () => zone.classList.remove('drag-over');
+            zone.ondrop = e => {
+                e.preventDefault(); zone.classList.remove('drag-over');
+                if (e.dataTransfer.files[0]) loadVisionFile(e.dataTransfer.files[0]);
+            };
+            inp.onchange = e => { if (e.target.files[0]) loadVisionFile(e.target.files[0]); };
+        }
+        function loadVisionFile(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const b64 = e.target.result.split(',')[1];
+                _visionImageB64 = b64;
+                document.getElementById('visionPreview').style.display = 'block';
+                document.getElementById('visionPreviewImg').src = e.target.result;
+                document.getElementById('visionResult').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+        async function runVisionTool() {
+            if (!_visionImageB64) { showToast('Please upload or select an image first', 'warning'); return; }
+            const btn = document.getElementById('visionBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Inspecting Image...';
+            try {
+                const apiKey = localStorage.getItem('hf_api_key') || '';
+                const resp = await fetch('/api/tools/describe-image', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: _visionImageB64, api_key: apiKey })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                document.getElementById('visionResultText').value = data.prompt || data.caption;
+                document.getElementById('visionResult').style.display = 'block';
+                showToast('Image described successfully!', 'success');
+            } catch (e) { showToast('Vision: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Inspect Image & Generate Prompt'; }
+        }
+        function copyVisionPrompt() {
+            const txt = document.getElementById('visionResultText').value;
+            navigator.clipboard.writeText(txt);
+            showToast('Prompt copied!', 'success');
+        }
+        function sendVisionToPrompt() {
+            const txt = document.getElementById('visionResultText').value;
+            document.getElementById('promptInput').value = txt;
+            closeTools();
+            showToast('Prompt applied!', 'success');
+        }
+
+        // --- Img2Img Studio ---
+        function initImg2ImgDrop() {
+            const zone = document.getElementById('img2imgDropZone');
+            const inp = document.getElementById('img2imgFileInput');
+            if (!zone) return;
+            zone.onclick = () => inp.click();
+            zone.ondragover = e => { e.preventDefault(); zone.classList.add('drag-over'); };
+            zone.ondragleave = () => zone.classList.remove('drag-over');
+            zone.ondrop = e => {
+                e.preventDefault(); zone.classList.remove('drag-over');
+                if (e.dataTransfer.files[0]) loadImg2ImgFile(e.dataTransfer.files[0]);
+            };
+            inp.onchange = e => { if (e.target.files[0]) loadImg2ImgFile(e.target.files[0]); };
+        }
+        function loadImg2ImgFile(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const b64 = e.target.result.split(',')[1];
+                _img2imgImageB64 = b64;
+                document.getElementById('img2imgPreview').style.display = 'block';
+                document.getElementById('img2imgPreviewImg').src = e.target.result;
+                document.getElementById('img2imgResult').style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+        async function runImg2ImgTool() {
+            if (!_img2imgImageB64) { showToast('Please upload or select an image first', 'warning'); return; }
+            const prompt = document.getElementById('img2imgPrompt').value.trim() || document.getElementById('promptInput').value.trim();
+            if (!prompt) { showToast('Please provide a prompt for transformation', 'warning'); return; }
+            const btn = document.getElementById('img2imgBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Variation...';
+            try {
+                const denoise = parseFloat(document.getElementById('img2imgDenoise').value);
+                const resp = await fetch('/api/modal/img2img', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        init_image: _img2imgImageB64,
+                        prompt: prompt,
+                        negative_prompt: document.getElementById('negativePrompt').value,
+                        denoising_strength: denoise,
+                        steps: parseInt(document.getElementById('modalSteps') ? document.getElementById('modalSteps').value : 25),
+                        cfg_scale: parseFloat(document.getElementById('modalCfgScale') ? document.getElementById('modalCfgScale').value : 7.0),
+                        model: document.getElementById('modalModel') ? document.getElementById('modalModel').value : ''
+                    })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                _img2imgResultB64 = data.image;
+                document.getElementById('img2imgResultImg').src = `data:image/png;base64,${data.image}`;
+                document.getElementById('img2imgResult').style.display = 'block';
+                showToast('Img2Img variation completed!', 'success');
+            } catch (e) { showToast('Img2Img: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Generate Variation'; }
+        }
+        function downloadImg2ImgResult() {
+            if (!_img2imgResultB64) return;
+            const a = document.createElement('a');
+            a.href = `data:image/png;base64,${_img2imgResultB64}`;
+            a.download = `abiart_img2img_${Date.now()}.png`;
+            a.click();
+        }
+
+        // --- Quick Actions from Generated Gallery Image ---
+        function getGalleryImageB64(idx) {
+            if (window._galleryImages && window._galleryImages[idx]) {
+                const img = window._galleryImages[idx];
+                return img.includes(',') ? img.split(',')[1] : img;
+            }
+            if (currentImage) {
+                return currentImage.includes(',') ? currentImage.split(',')[1] : currentImage;
+            }
+            return null;
+        }
+        function quickUpscale(idx) {
+            const b64 = getGalleryImageB64(idx);
+            if (!b64) { showToast('No image to upscale', 'warning'); return; }
+            openTools('upscale');
+            loadCurrentImageToTool('upscale', b64);
+        }
+        function quickRemoveBg(idx) {
+            const b64 = getGalleryImageB64(idx);
+            if (!b64) { showToast('No image to process', 'warning'); return; }
+            openTools('removebg');
+            loadCurrentImageToTool('removebg', b64);
+        }
+        function quickUseAsImg2Img(idx) {
+            const b64 = getGalleryImageB64(idx);
+            if (!b64) { showToast('No image to use as reference', 'warning'); return; }
+            openTools('img2img');
+            loadCurrentImageToTool('img2img', b64);
+        }
+        function quickDescribe(idx) {
+            const b64 = getGalleryImageB64(idx);
+            if (!b64) { showToast('No image to inspect', 'warning'); return; }
+            openTools('vision');
+            loadCurrentImageToTool('vision', b64);
         }
 
         // --- ControlNet Helpers ---
@@ -3246,7 +3808,14 @@
         }
 
         // Init tools drop zones
-        document.addEventListener('DOMContentLoaded', () => { initTaggerDrop(); initMetadataDrop(); });
+        document.addEventListener('DOMContentLoaded', () => {
+            initUpscaleDrop();
+            initRemoveBgDrop();
+            initVisionDrop();
+            initImg2ImgDrop();
+            initTaggerDrop();
+            initMetadataDrop();
+        });
     </script>
 </body>
 
