@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: abiart
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 300
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: ADMIN_USERNAME
+        value: malowvx
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: CIVITAI_TOKEN
+        sync: false
+      - key: MODAL_GENERATE_URL
+        sync: false
+      - key: MODAL_MODELS_URL
+        sync: false
+      - key: MODAL_LOAD_URL
+        sync: false
+      - key: MODAL_DELETE_URL
+        sync: false
+      - key: MODAL_IMG2IMG_URL
+        sync: false
+      - key: MODAL_UPSCALE_URL
+        sync: false
