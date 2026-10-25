@@ -578,6 +578,11 @@ def generate_kaggle():
             except Exception as e:
                 print(f"[Kaggle] Model switch error: {e}")
 
+        seed = int(data.get('seed', -1))
+        batch_count = int(data.get('batch_count', 1))
+        sampler_name = data.get('sampler_name', data.get('scheduler', 'Euler'))
+        noise_scheduler = data.get('noise_scheduler', 'Normal')
+
         payload = {
             "prompt": full_prompt,
             "negative_prompt": negative_prompt,
@@ -585,10 +590,19 @@ def generate_kaggle():
             "steps": steps,
             "width": width,
             "height": height,
-            "sampler_name": "Euler",
-            "scheduler": "Normal",
-            "seed": -1,
+            "sampler_name": sampler_name,
+            "scheduler": noise_scheduler,
+            "seed": seed,
+            "batch_size": batch_count,
         }
+
+        if data.get('enable_hr'):
+            payload["enable_hr"] = True
+            payload["hr_scale"] = float(data.get('hr_scale', 1.5))
+            payload["hr_upscaler"] = data.get('hr_upscaler', 'R-ESRGAN 4x+')
+            payload["denoising_strength"] = float(data.get('hr_denoising_strength', 0.35))
+            if data.get('hr_second_pass_steps'):
+                payload["hr_second_pass_steps"] = int(data.get('hr_second_pass_steps'))
 
         print(f"[Kaggle] Generating with payload: {payload}")
         response = requests.post(f"{url}/sdapi/v1/txt2img", json=payload, timeout=300)
