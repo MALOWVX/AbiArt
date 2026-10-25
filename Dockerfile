@@ -14,9 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY . .
+RUN chmod +x start.sh
 
-# Railway injects $PORT at runtime
-EXPOSE ${PORT:-5000}
+# Railway / Render injects $PORT at runtime
+EXPOSE 5000
 
-# Shell form so $PORT is expanded by the shell
-CMD gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 2 --timeout 300 app:app
+# Use run.py which dynamically binds to the exact $PORT provided at runtime
+CMD ["python", "run.py"]
+
