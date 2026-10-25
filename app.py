@@ -6,6 +6,7 @@ import sqlite3
 import logging
 import traceback
 import io
+import time
 import requests
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 from collections import deque
@@ -44,13 +45,39 @@ def log(level, message, extra=None):
 # ===============================
 # DATABASE & AUTH
 # ===============================
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
+DATABASE_URL = (
+    os.environ.get('DATABASE_URL')
+    or os.environ.get('DATABASE_PUBLIC_URL')
+    or os.environ.get('DATABASE_PRIVATE_URL')
+    or ''
+)
+
+# If individual Railway PG* variables exist but DATABASE_URL was not set
+if not DATABASE_URL and os.environ.get('PGHOST'):
+    pghost = os.environ.get('PGHOST')
+    pgport = os.environ.get('PGPORT', '5432')
+    pguser = os.environ.get('PGUSER', 'postgres')
+    pgpassword = os.environ.get('PGPASSWORD', '')
+    pgdatabase = os.environ.get('PGDATABASE', 'railway')
+    DATABASE_URL = f"postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
+
+# Normalize protocol prefix (SQLAlchemy / psycopg2 standard)
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
 USE_POSTGRES = bool(DATABASE_URL)
 
 if USE_POSTGRES:
     import psycopg2
     import psycopg2.extras
-    print(f"[DB] Using PostgreSQL")
+    safe_db_url = DATABASE_URL
+    if '@' in safe_db_url and '://' in safe_db_url:
+        protocol_user, host_part = safe_db_url.split('@', 1)
+        if ':' in protocol_user:
+            protocol, rest = protocol_user.split('://', 1)
+            user = rest.split(':', 1)[0]
+            safe_db_url = f"{protocol}://{user}:****@{host_part}"
+    print(f"[DB] Using PostgreSQL at {safe_db_url}")
 else:
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'abiart.db')
     print(f"[DB] Using SQLite at {DB_PATH}")
@@ -92,62 +119,73 @@ def db_fetchall(conn, query, params=None):
     return rows
 
 
-def init_db():
-    conn = get_db()
-    if USE_POSTGRES:
-        db_execute(conn, '''CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(100) UNIQUE NOT NULL,
-            password_hash VARCHAR(255) NOT NULL,
-            images_remaining INTEGER DEFAULT 3,
-            is_admin BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        db_execute(conn, '''CREATE TABLE IF NOT EXISTS community_presets (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(100) NOT NULL,
-            title VARCHAR(200) NOT NULL,
-            image_thumb TEXT NOT NULL,
-            preset_json TEXT NOT NULL,
-            likes INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-    else:
-        db_execute(conn, '''CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            images_remaining INTEGER DEFAULT 3,
-            is_admin BOOLEAN DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        db_execute(conn, '''CREATE TABLE IF NOT EXISTS community_presets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            title TEXT NOT NULL,
-            image_thumb TEXT NOT NULL,
-            preset_json TEXT NOT NULL,
-            likes INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-    conn.commit()
+def init_db(max_retries=5, delay=2):
+    """Initialize database tables and admin account with retry for cloud deployments"""
+    for attempt in range(1, max_retries + 1):
+        try:
+            conn = get_db()
+            if USE_POSTGRES:
+                db_execute(conn, '''CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) UNIQUE NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    images_remaining INTEGER DEFAULT 3,
+                    is_admin BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''')
+                db_execute(conn, '''CREATE TABLE IF NOT EXISTS community_presets (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL,
+                    title VARCHAR(200) NOT NULL,
+                    image_thumb TEXT NOT NULL,
+                    preset_json TEXT NOT NULL,
+                    likes INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''')
+            else:
+                db_execute(conn, '''CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    images_remaining INTEGER DEFAULT 3,
+                    is_admin BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''')
+                db_execute(conn, '''CREATE TABLE IF NOT EXISTS community_presets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    image_thumb TEXT NOT NULL,
+                    preset_json TEXT NOT NULL,
+                    likes INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )''')
+            conn.commit()
 
-    # Seed admin account
-    admin_user = os.environ.get('ADMIN_USERNAME', 'malowvx')
-    admin_pass = os.environ.get('ADMIN_PASSWORD', 'zaza1140')
-    existing = db_fetchone(conn, 'SELECT id FROM users WHERE username = ?', (admin_user,))
-    if not existing:
-        db_execute(conn,
-            'INSERT INTO users (username, password_hash, images_remaining, is_admin) VALUES (?, ?, ?, ?)',
-            (admin_user, generate_password_hash(admin_pass), -1, True)
-        )
-        conn.commit()
-        print(f"[Auth] Admin account '{admin_user}' created")
-    else:
-        # Ensure admin always has admin flag and unlimited credits
-        db_execute(conn, 'UPDATE users SET is_admin = TRUE, images_remaining = -1 WHERE username = ?', (admin_user,))
-        conn.commit()
-    conn.close()
+            # Seed admin account
+            admin_user = os.environ.get('ADMIN_USERNAME', 'malowvx')
+            admin_pass = os.environ.get('ADMIN_PASSWORD', 'zaza1140')
+            existing = db_fetchone(conn, 'SELECT id FROM users WHERE username = ?', (admin_user,))
+            if not existing:
+                db_execute(conn,
+                    'INSERT INTO users (username, password_hash, images_remaining, is_admin) VALUES (?, ?, ?, ?)',
+                    (admin_user, generate_password_hash(admin_pass), -1, True)
+                )
+                conn.commit()
+                print(f"[Auth] Admin account '{admin_user}' created")
+            else:
+                # Ensure admin always has admin flag and unlimited credits
+                db_execute(conn, 'UPDATE users SET is_admin = TRUE, images_remaining = -1 WHERE username = ?', (admin_user,))
+                conn.commit()
+            conn.close()
+            print("[DB] Database initialized successfully")
+            return
+        except Exception as e:
+            print(f"[DB] Init attempt {attempt}/{max_retries} failed: {e}")
+            if attempt < max_retries:
+                time.sleep(delay)
+            else:
+                print("[DB] Warning: Could not complete init_db. Will retry when requests arrive.")
 
 
 
@@ -249,6 +287,27 @@ MODAL_UPSCALE_URL = os.environ.get(
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Healthcheck endpoint for Railway / Render"""
+    db_ok = False
+    try:
+        conn = get_db()
+        db_fetchone(conn, 'SELECT 1')
+        conn.close()
+        db_ok = True
+    except Exception as e:
+        db_ok = False
+
+    return jsonify({
+        'status': 'healthy' if db_ok else 'degraded',
+        'db_type': 'postgres' if USE_POSTGRES else 'sqlite',
+        'db_connected': db_ok,
+        'app': 'AbiArt'
+    }), (200 if db_ok or not USE_POSTGRES else 503)
+
 
 
 # ===============================

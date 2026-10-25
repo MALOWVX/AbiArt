@@ -2,7 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Install system dependencies (certificates for TLS/SSL and curl)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
