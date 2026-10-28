@@ -282,6 +282,43 @@ MODAL_UPSCALE_URL = os.environ.get(
     "https://YOUR_USERNAME--stable-diffusion-api-stablediffusion-api-upscale-dev.modal.run"
 )
 
+# Kaggle Backend URL (loaded from environment or auto-registered from notebook)
+KAGGLE_URL = os.environ.get("KAGGLE_URL", "").rstrip("/")
+KAGGLE_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kaggle_backend.json')
+
+def get_kaggle_url():
+    """Retrieve active Kaggle backend URL from env, memory, or persistent config"""
+    global KAGGLE_URL
+    if KAGGLE_URL:
+        return KAGGLE_URL
+    if os.path.exists(KAGGLE_CONFIG_FILE):
+        try:
+            with open(KAGGLE_CONFIG_FILE, 'r') as f:
+                data = json.load(f)
+                url = data.get('url', '').rstrip('/')
+                if url:
+                    return url
+        except Exception:
+            pass
+    return ""
+
+def set_kaggle_url(url):
+    """Set and persist active Kaggle backend URL"""
+    global KAGGLE_URL
+    KAGGLE_URL = url.rstrip('/')
+    try:
+        with open(KAGGLE_CONFIG_FILE, 'w') as f:
+            json.dump({'url': KAGGLE_URL, 'updated_at': time.time()}, f)
+    except Exception as e:
+        print(f"[Kaggle] Could not save backend URL: {e}")
+    return KAGGLE_URL
+
+KAGGLE_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+}
+
+
 
 
 @app.route('/')
@@ -497,56 +534,87 @@ def generate_hf():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/kaggle/register', methods=['POST'])
+def register_kaggle():
+    """Register or update active Kaggle backend URL (called by notebook or admin)"""
+    data = request.json or {}
+    url = data.get('url', '').strip()
+    if not url:
+        return jsonify({'error': 'Missing url'}), 400
+    if not url.startswith('http://') and not url.startswith('https://'):
+        url = 'https://' + url
+    set_kaggle_url(url)
+    print(f"[Kaggle] Active backend URL set to: {url}")
+    return jsonify({'success': True, 'url': url})
+
+
+@app.route('/api/kaggle/status', methods=['GET', 'POST'])
+def kaggle_status():
+    """Check connection status to Kaggle backend"""
+    url = get_kaggle_url()
+    if not url:
+        return jsonify({'configured': False, 'connected': False, 'message': 'No Kaggle URL configured.'})
+    try:
+        response = requests.get(f"{url}/sdapi/v1/options", timeout=8, headers=KAGGLE_HEADERS)
+        connected = (response.status_code == 200)
+        return jsonify({'configured': True, 'connected': connected, 'url': url})
+    except Exception as e:
+        return jsonify({'configured': True, 'connected': False, 'error': str(e), 'url': url})
+
+
 @app.route('/api/kaggle/test', methods=['POST'])
 def test_kaggle():
     """Test connection to Kaggle backend"""
+    data = request.json or {}
+    url = data.get('url', '').strip() or get_kaggle_url()
+    if not url:
+        return jsonify({'error': 'No Kaggle URL configured on server.'}), 400
+    if not url.startswith('http://') and not url.startswith('https://'):
+        url = 'https://' + url
     try:
-        data = request.json
-        url = data.get('url', '').rstrip('/')
-
-        response = requests.get(f"{url}/sdapi/v1/options", timeout=10)
-        
+        response = requests.get(f"{url}/sdapi/v1/options", timeout=12, headers=KAGGLE_HEADERS)
         if response.status_code == 200:
-            return jsonify({'success': True})
+            set_kaggle_url(url)
+            return jsonify({'success': True, 'url': url})
         else:
-            return jsonify({'error': 'Could not connect to SD WebUI'}), 400
-
+            return jsonify({'error': f'SD WebUI returned HTTP {response.status_code}'}), 400
     except requests.exceptions.Timeout:
         return jsonify({'error': 'Connection timed out'}), 504
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/kaggle/models', methods=['POST'])
+@app.route('/api/kaggle/models', methods=['GET', 'POST'])
 def get_kaggle_models():
-    """Get available models from Kaggle backend"""
+    """Get available models from Kaggle backend (server-side, like Modal)"""
+    data = request.json or {} if request.is_json else {}
+    url = data.get('url', '').strip() or get_kaggle_url()
+    if not url:
+        return jsonify({'error': 'Kaggle backend not configured. Set KAGGLE_URL on Railway or start Kaggle notebook.', 'models': []}), 400
     try:
-        data = request.json
-        url = data.get('url', '').rstrip('/')
-
-        response = requests.get(f"{url}/sdapi/v1/sd-models", timeout=30)
-        
+        response = requests.get(f"{url}/sdapi/v1/sd-models", timeout=30, headers=KAGGLE_HEADERS)
         if response.status_code == 200:
             models = response.json()
             return jsonify({'models': models})
         else:
-            return jsonify({'error': 'Could not fetch models'}), 400
-
+            return jsonify({'error': f'Could not fetch models (HTTP {response.status_code})', 'models': []}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e), 'models': []}), 500
 
 
 @app.route('/api/kaggle/generate', methods=['POST'])
 def generate_kaggle():
-    """Generate image using Kaggle backend"""
+    """Generate image using Kaggle backend (server-side, like Modal)"""
     try:
-        # Credit check (Kaggle generates 1 image)
         user, err = check_credits(1)
         if err:
             return err
 
-        data = request.json
-        url = data.get('url', '').rstrip('/')
+        data = request.json or {}
+        url = data.get('url', '').strip() or get_kaggle_url()
+        if not url:
+            return jsonify({'error': 'Kaggle backend not configured. Set KAGGLE_URL on Railway or start Kaggle notebook.'}), 400
+
         prompt = data.get('prompt', '')
         negative_prompt = data.get('negative_prompt', '')
         model = data.get('model', '')
@@ -559,20 +627,16 @@ def generate_kaggle():
         if not prompt:
             return jsonify({'error': 'Please provide a prompt'}), 400
 
-        # Add LoRA syntax to prompt if any active
         full_prompt = prompt
         for lora in loras:
             full_prompt = f"<lora:{lora['name']}:{lora['weight']}> " + full_prompt
 
-        # Change model if specified
         if model:
             print(f"[Kaggle] Switching to model: {model}")
             try:
-                import time
                 model_resp = requests.post(f"{url}/sdapi/v1/options", json={
                     "sd_model_checkpoint": model
-                }, timeout=120)
-                print(f"[Kaggle] Model switch response: {model_resp.status_code}")
+                }, timeout=120, headers=KAGGLE_HEADERS)
                 if model_resp.status_code == 200:
                     time.sleep(2)
             except Exception as e:
@@ -605,7 +669,7 @@ def generate_kaggle():
                 payload["hr_second_pass_steps"] = int(data.get('hr_second_pass_steps'))
 
         print(f"[Kaggle] Generating with payload: {payload}")
-        response = requests.post(f"{url}/sdapi/v1/txt2img", json=payload, timeout=300)
+        response = requests.post(f"{url}/sdapi/v1/txt2img", json=payload, timeout=300, headers=KAGGLE_HEADERS)
         print(f"[Kaggle] Response status: {response.status_code}")
 
         if response.status_code == 200:
@@ -617,15 +681,13 @@ def generate_kaggle():
                     'image': result['images'][0]
                 })
             else:
-                print(f"[Kaggle] No images in response: {result}")
-                return jsonify({'error': 'No image generated - check model loading'}), 500
+                return jsonify({'error': 'No image returned by SD WebUI'}), 500
         else:
             error_text = response.text[:500] if response.text else 'Unknown error'
-            print(f"[Kaggle] Generation failed: {error_text}")
             return jsonify({'error': f'Generation failed: {error_text}'}), 500
 
     except requests.exceptions.Timeout:
-        return jsonify({'error': 'Generation timed out (model may still be loading - try again)'}), 504
+        return jsonify({'error': 'Generation timed out'}), 504
     except Exception as e:
         print(f"[Kaggle] Exception: {str(e)}")
         return jsonify({'error': str(e)}), 500

@@ -584,17 +584,17 @@
                     </details>
                 </div>
 
-                <!-- KAGGLE CONFIG -->
+                <!-- KAGGLE CONFIG (Optionnel) -->
                 <div id="kaggleConfig" style="display:none">
-                    <details class="sb-section" open>
-                        <summary><i class="fas fa-link"></i> Kaggle Connection</summary>
+                    <details class="sb-section">
+                        <summary style="font-size:.7rem;opacity:0.7"><i class="fas fa-cog"></i> URL Backend Kaggle (Optionnel)</summary>
                         <div class="sb-body">
                             <div class="row">
                                 <input type="url" id="kaggleUrl" placeholder="https://xxxx.trycloudflare.com" style="flex:1">
-                                <button class="btn btn-sm" onclick="testKaggleConnection()"><i class="fas fa-plug"></i>
-                                    Connect</button>
+                                <button class="btn btn-sm" onclick="testKaggleConnection()"><i class="fas fa-check"></i>
+                                    Appliquer</button>
                             </div>
-                            <p style="font-size:.65rem;color:var(--muted)"><i class="fas fa-info-circle"></i> Collez ici l'URL Cloudflare générée par votre notebook Kaggle</p>
+                            <p style="font-size:.65rem;color:var(--muted)"><i class="fas fa-info-circle"></i> Automatique si KAGGLE_URL est défini sur Railway ou via le notebook.</p>
                         </div>
                     </details>
                 </div>
@@ -1357,32 +1357,55 @@
             document.getElementById('modalSettings').style.display = isModal ? '' : 'none';
             document.getElementById('civitaiBrowser').style.display = (isKaggle || isModal) ? '' : 'none';
             document.getElementById('hfApiCard').style.display = 'none';
-            if (isKaggle && kaggleUrl) loadKaggleModels();
+            if (isKaggle) loadKaggleModels();
             if (isModal) { updateStatus('Modal Ready', 'success'); refreshModalModels(); }
         }
 
         // ========== KAGGLE ==========
         async function testKaggleConnection() {
-            const url = document.getElementById('kaggleUrl').value.trim();
-            if (!url) { showToast('Please enter the ngrok URL'); return; }
-            updateStatus('Connecting...', 'warning');
+            const urlInput = document.getElementById('kaggleUrl');
+            const url = urlInput ? urlInput.value.trim() : '';
+            updateStatus('Connecting to Kaggle...', 'warning');
             try {
-                const response = await fetch('/api/kaggle/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+                const response = await fetch('/api/kaggle/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
                 const data = await response.json();
-                if (data.success) { kaggleUrl = url; localStorage.setItem('kaggle_url', url); updateStatus('Connected', 'success'); showToast('Connected to Kaggle!', 'success'); loadKaggleModels(); }
-                else throw new Error(data.error || 'Connection failed');
-            } catch (e) { updateStatus('Disconnected', 'error'); showToast(e.message); }
+                if (data.success) {
+                    kaggleUrl = data.url || url;
+                    localStorage.setItem('kaggle_url', kaggleUrl);
+                    updateStatus('Kaggle Ready', 'success');
+                    showToast('Connecté à Kaggle !', 'success');
+                    loadKaggleModels();
+                } else throw new Error(data.error || 'Connection failed');
+            } catch (e) {
+                updateStatus('Kaggle Disconnected', 'error');
+                showToast(e.message);
+            }
         }
 
         async function loadKaggleModels() {
-            if (!kaggleUrl) return;
+            updateStatus('Connecting to Kaggle...', 'warning');
             try {
-                const response = await fetch('/api/kaggle/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: kaggleUrl }) });
+                const response = await fetch('/api/kaggle/models', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
                 const data = await response.json();
-                if (data.models) {
+                if (data.models && data.models.length > 0) {
+                    updateStatus('Kaggle Ready', 'success');
                     document.getElementById('kaggleModel').innerHTML = data.models.map(m => `<option value="${m.title}">${m.model_name}</option>`).join('');
+                } else {
+                    updateStatus('Kaggle Offline', 'error');
+                    if (data.error) showToast(data.error);
                 }
-            } catch (e) { console.error('Failed to load models:', e); }
+            } catch (e) {
+                updateStatus('Kaggle Offline', 'error');
+                console.error('Failed to load Kaggle models:', e);
+            }
         }
 
         // ========== CIVITAI ==========
@@ -1970,11 +1993,12 @@
                         })
                     });
                 } else {
-                    if (!kaggleUrl) throw new Error('Please connect to Kaggle first');
                     const [width, height] = document.getElementById('imgSize').value.split('x').map(Number);
                     response = await fetch('/api/kaggle/generate', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-                            url: kaggleUrl, prompt,
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt,
                             negative_prompt: document.getElementById('negativePrompt').value,
                             model: document.getElementById('kaggleModel').value,
                             cfg_scale: parseFloat(document.getElementById('cfgScale').value),
