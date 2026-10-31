@@ -1388,11 +1388,12 @@
 
         async function loadKaggleModels() {
             updateStatus('Connecting to Kaggle...', 'warning');
+            const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
             try {
                 const response = await fetch('/api/kaggle/models', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
+                    body: JSON.stringify({ url: activeUrl })
                 });
                 const data = await response.json();
                 if (data.models && data.models.length > 0) {
@@ -1994,10 +1995,12 @@
                     });
                 } else {
                     const [width, height] = document.getElementById('imgSize').value.split('x').map(Number);
+                    const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
                     response = await fetch('/api/kaggle/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            url: activeUrl,
                             prompt,
                             negative_prompt: document.getElementById('negativePrompt').value,
                             model: document.getElementById('kaggleModel').value,
