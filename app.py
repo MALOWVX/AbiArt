@@ -855,23 +855,161 @@ def search_civitai():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/kaggle/options', methods=['GET', 'POST'])
+def get_kaggle_options():
+    """Samplers, schedulers, Hi-Res upscalers and LoRAs exposed by the Kaggle A1111 backend"""
+    data = request.get_json(silent=True) or {}
+    base_url = (data.get('url', '') or '').strip().rstrip('/') or (get_kaggle_url() or '').rstrip('/')
+    if not base_url:
+        return jsonify({'error': 'Kaggle backend not configured.'}), 400
+
+    if data.get('refresh_loras'):
+        try:
+            requests.post(f'{base_url}/sdapi/v1/refresh-loras', headers=KAGGLE_HEADERS, timeout=60)
+        except requests.exceptions.RequestException as e:
+            print(f"[Kaggle] refresh-loras failed: {e}")
+
+    def fetch(path):
+        try:
+            r = requests.get(f'{base_url}{path}', headers=KAGGLE_HEADERS, timeout=20)
+            if r.status_code == 200:
+                return r.json()
+        except Exception as e:
+            print(f"[Kaggle] {path} failed: {e}")
+        return None
+
+    samplers = fetch('/sdapi/v1/samplers')
+    schedulers = fetch('/sdapi/v1/schedulers')
+    upscalers = fetch('/sdapi/v1/upscalers')
+    latent_modes = fetch('/sdapi/v1/latent-upscale-modes')
+    loras = fetch('/sdapi/v1/loras')
+    if samplers is None and loras is None:
+        return jsonify({'error': 'Could not reach the Kaggle backend'}), 502
+
+    def names(items, *keys):
+        out = []
+        for item in items or []:
+            if isinstance(item, dict):
+                value = next((item.get(k) for k in keys if item.get(k)), None)
+                if value and value != 'None' and value not in out:
+                    out.append(value)
+        return out
+
+    return jsonify({
+        'samplers': names(samplers, 'name'),
+        'schedulers': names(schedulers, 'label', 'name'),
+        'upscalers': names(latent_modes, 'name') + [u for u in names(upscalers, 'name') if u not in names(latent_modes, 'name')],
+        'loras': names(loras, 'name'),
+    })
+
+
+# --- Kaggle model downloads (handled by the "abiart-downloader" extension of the v3 notebook) ---
+# Set KAGGLE_DOWNLOAD_ADMIN_ONLY=1 on Railway to restrict downloads to admin accounts.
+KAGGLE_DOWNLOAD_ADMIN_ONLY = os.environ.get('KAGGLE_DOWNLOAD_ADMIN_ONLY', '0') == '1'
+KAGGLE_EXT_MISSING = ("L'extension de téléchargement n'est pas chargée sur le notebook Kaggle : "
+                      "relance la cellule 5 du notebook kaggle_backend3_async.ipynb.")
+
+
+def _kaggle_download_guard():
+    """Error response if the current user may not download models to Kaggle, else None."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Please log in to download models', 'state': 'error'}), 401
+    if KAGGLE_DOWNLOAD_ADMIN_ONLY and not user['is_admin']:
+        return jsonify({'error': 'Seul un administrateur peut télécharger des modèles', 'state': 'error'}), 403
+    return None
+
+
+def _kaggle_ext_missing(response):
+    """True when the notebook answered 404/405 without our JSON error (= extension not installed)."""
+    if response.status_code not in (404, 405):
+        return False
+    try:
+        payload = response.json()
+    except Exception:
+        return True
+    return not (isinstance(payload, dict) and (payload.get('error') or payload.get('state')))
+
+
 @app.route('/api/kaggle/download', methods=['POST'])
 def download_to_kaggle():
-    """Trigger model download on Kaggle backend"""
+    """Start a model / LoRA / VAE download on the Kaggle machine (runs in the background there)"""
+    denied = _kaggle_download_guard()
+    if denied:
+        return denied
     try:
-        data = request.json
-        url = data.get('url', '').rstrip('/')
-        model_url = data.get('model_url', '')
-        filename = data.get('filename', '')
-        model_type = data.get('type', 'checkpoint')
+        data = request.get_json(silent=True) or {}
+        base_url = (data.get('url', '') or '').strip().rstrip('/') or (get_kaggle_url() or '').rstrip('/')
+        model_url = (data.get('model_url', '') or '').strip()
+        filename = (data.get('filename', '') or '').strip()
+        kind = (data.get('type', 'checkpoint') or 'checkpoint').lower()
+        if kind not in ('checkpoint', 'lora', 'vae'):
+            kind = 'checkpoint'
+        if not base_url:
+            return jsonify({'error': 'Kaggle backend not configured. Start the Kaggle notebook first.'}), 400
+        if not model_url:
+            return jsonify({'error': 'No model URL provided'}), 400
 
-        return jsonify({
-            'success': True,
-            'message': f'To download, run in Kaggle notebook: download_civitai_model("{model_url}", "{filename}", "{model_type}")'
-        })
+        payload = {'url': model_url, 'type': kind, 'filename': filename}
+        # The server-side Civitai token is only sent to the Kaggle backend registered on the server,
+        # never to a URL that merely came from the browser.
+        civitai_token = os.environ.get('CIVITAI_TOKEN', '').strip()
+        if civitai_token and base_url == (get_kaggle_url() or '').rstrip('/'):
+            payload['token'] = civitai_token
 
+        print(f"[Kaggle] Starting {kind} download: {filename or model_url[:80]}")
+        r = requests.post(f'{base_url}/abiart/download', json=payload, headers=KAGGLE_HEADERS, timeout=30)
+        if _kaggle_ext_missing(r):
+            return jsonify({'error': KAGGLE_EXT_MISSING}), 501
+        try:
+            result = r.json()
+        except Exception:
+            return jsonify({'error': f'Kaggle backend error (HTTP {r.status_code})'}), 502
+        if r.status_code == 200 and result.get('job_id'):
+            return jsonify({'success': True, 'job_id': result['job_id'],
+                            'filename': result.get('filename') or filename, 'type': result.get('type', kind)})
+        return jsonify({'error': result.get('error') or f'Download could not start (HTTP {r.status_code})'}), \
+            r.status_code if r.status_code in (400, 429) else 502
+    except requests.exceptions.RequestException as e:
+        print(f"[Kaggle] Download start failed: {e}")
+        return jsonify({'error': f'Backend Kaggle injoignable : le notebook est-il toujours lancé ? ({type(e).__name__})'}), 502
     except Exception as e:
+        print(f"[Kaggle] Download exception: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/kaggle/download/status', methods=['GET', 'POST'])
+def kaggle_download_status():
+    """Progress of a download started with /api/kaggle/download (state: running / done / error)"""
+    denied = _kaggle_download_guard()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
+    base_url = (request.args.get('url') or data.get('url') or '').strip().rstrip('/') or (get_kaggle_url() or '').rstrip('/')
+    job_id = (request.args.get('job_id') or data.get('job_id') or '').strip()
+    if not base_url or not job_id or not job_id.isalnum():
+        return jsonify({'error': 'Missing Kaggle URL or job_id', 'state': 'error'}), 400
+    try:
+        r = requests.get(f'{base_url}/abiart/download/{job_id}', headers=KAGGLE_HEADERS, timeout=20)
+    except requests.exceptions.RequestException:
+        return jsonify({'state': 'unreachable'})      # the page retries a few times
+    if _kaggle_ext_missing(r):
+        return jsonify({'error': KAGGLE_EXT_MISSING, 'state': 'error'}), 501
+    try:
+        result = r.json()
+    except Exception:
+        return jsonify({'state': 'unreachable'})      # tunnel hiccup (HTML error page)
+    if not isinstance(result, dict) or not result.get('state'):
+        return jsonify({'state': 'unreachable'})
+    if result.get('state') == 'done':
+        # A1111 only sees a new file after it re-scans its folders
+        refresh = {'checkpoint': 'refresh-checkpoints', 'lora': 'refresh-loras', 'vae': 'refresh-vae'}.get(result.get('kind'))
+        if refresh:
+            try:
+                requests.post(f'{base_url}/sdapi/v1/{refresh}', headers=KAGGLE_HEADERS, timeout=30)
+            except requests.exceptions.RequestException as e:
+                print(f"[Kaggle] {refresh} failed: {e}")
+    return jsonify(result)
 
 
 # ===============================
