@@ -602,52 +602,119 @@ def get_kaggle_models():
         return jsonify({'error': str(e), 'models': []}), 500
 
 
+@app.route('/api/kaggle/options', methods=['GET', 'POST'])
+def get_kaggle_options():
+    """Samplers, schedulers, upscalers (Hi-Res) and LoRAs exposed by the Kaggle A1111 backend"""
+    data = request.get_json(silent=True) or {}
+    url = (data.get('url') or '').strip().rstrip('/') or get_kaggle_url()
+    if not url:
+        return jsonify({'error': 'Kaggle backend not configured.'}), 400
+
+    def fetch(path, method='GET'):
+        try:
+            r = requests.request(method, f"{url}{path}", timeout=25, headers=KAGGLE_HEADERS)
+            if r.status_code != 200:
+                return None
+            try:
+                return r.json()
+            except Exception:
+                return True  # 200 without JSON body (e.g. refresh endpoints)
+        except Exception as e:
+            print(f"[Kaggle] {path} failed: {e}")
+            return None
+
+    if data.get('refresh_loras'):
+        fetch('/sdapi/v1/refresh-loras', 'POST')
+
+    samplers = fetch('/sdapi/v1/samplers')
+    schedulers = fetch('/sdapi/v1/schedulers')
+    upscalers = fetch('/sdapi/v1/upscalers')
+    loras = fetch('/sdapi/v1/loras')
+
+    def names(items, key):
+        return [i[key] for i in items if isinstance(i, dict) and i.get(key)] if isinstance(items, list) else []
+
+    return jsonify({
+        'samplers': names(samplers, 'name'),
+        'schedulers': names(schedulers, 'label'),
+        'upscalers': names(upscalers, 'name'),
+        'loras': names(loras, 'name'),
+    })
+
+
+def kaggle_ensure_model(url, model):
+    """Switch checkpoint on the Kaggle backend only if it differs from the loaded one."""
+    if not model:
+        return
+    try:
+        opts = requests.get(f"{url}/sdapi/v1/options", timeout=20, headers=KAGGLE_HEADERS).json()
+        if opts.get('sd_model_checkpoint') == model:
+            return
+    except Exception:
+        pass
+    print(f"[Kaggle] Switching to model: {model}")
+    try:
+        requests.post(f"{url}/sdapi/v1/options", json={"sd_model_checkpoint": model},
+                      timeout=170, headers=KAGGLE_HEADERS)
+    except Exception as e:
+        print(f"[Kaggle] Model switch error: {e}")
+
+
 @app.route('/api/kaggle/generate', methods=['POST'])
 def generate_kaggle():
-    """Generate image using Kaggle backend (server-side, like Modal)"""
+    """Generate image(s) using the Kaggle backend (same parameters as the Modal tab, minus ADetailer/ControlNet)"""
     try:
-        user, err = check_credits(1)
+        data = request.get_json(silent=True) or {}
+        try:
+            batch_count = max(1, min(4, int(data.get('batch_count', 1))))
+        except (ValueError, TypeError):
+            batch_count = 1
+
+        user, err = check_credits(batch_count)
         if err:
             return err
 
-        data = request.json or {}
-        url = data.get('url', '').strip() or get_kaggle_url()
+        url = (data.get('url') or '').strip().rstrip('/') or get_kaggle_url()
         if not url:
             return jsonify({'error': 'Kaggle backend not configured. Set KAGGLE_URL on Railway or start Kaggle notebook.'}), 400
 
         prompt = data.get('prompt', '')
-        negative_prompt = data.get('negative_prompt', '')
-        model = data.get('model', '')
-        cfg_scale = data.get('cfg_scale', 7)
-        steps = data.get('steps', 25)
-        width = data.get('width', 1024)
-        height = data.get('height', 1024)
-        loras = data.get('loras', [])
-
         if not prompt:
             return jsonify({'error': 'Please provide a prompt'}), 400
+        negative_prompt = data.get('negative_prompt', '')
+        model = data.get('model', '')
+        loras = data.get('loras', [])
+
+        def as_num(key, default, cast=float):
+            try:
+                return cast(data.get(key, default))
+            except (ValueError, TypeError):
+                return default
+
+        cfg_scale = as_num('cfg_scale', 7.0)
+        steps = max(1, min(150, as_num('steps', 25, int)))
+        # A1111 needs multiples of 8
+        width = max(256, min(2048, (as_num('width', 832, int) // 8) * 8))
+        height = max(256, min(2048, (as_num('height', 1216, int) // 8) * 8))
+        clip_skip = max(1, min(12, as_num('clip_skip', 1, int)))
+        seed = as_num('seed', -1, int)
+        if seed < 0:
+            seed = random.randint(1, 2147483647)
+
+        # Same naming as the Modal route: "scheduler" = sampler, "noise_scheduler" = scheduler
+        sampler_name = data.get('sampler_name') or data.get('scheduler') or 'Euler a'
+        noise_scheduler = data.get('noise_scheduler') or 'Automatic'
 
         full_prompt = prompt
         for lora in loras:
-            full_prompt = f"<lora:{lora['name']}:{lora['weight']}> " + full_prompt
-
-        if model:
-            print(f"[Kaggle] Switching to model: {model}")
             try:
-                model_resp = requests.post(f"{url}/sdapi/v1/options", json={
-                    "sd_model_checkpoint": model
-                }, timeout=120, headers=KAGGLE_HEADERS)
-                if model_resp.status_code == 200:
-                    time.sleep(2)
-            except Exception as e:
-                print(f"[Kaggle] Model switch error: {e}")
+                full_prompt = f"<lora:{lora['name']}:{float(lora.get('weight', 0.8))}> " + full_prompt
+            except Exception:
+                pass
 
-        seed = int(data.get('seed', -1))
-        batch_count = int(data.get('batch_count', 1))
-        sampler_name = data.get('sampler_name', data.get('scheduler', 'Euler'))
-        noise_scheduler = data.get('noise_scheduler', 'Normal')
+        kaggle_ensure_model(url, model)
 
-        payload = {
+        base_payload = {
             "prompt": full_prompt,
             "negative_prompt": negative_prompt,
             "cfg_scale": cfg_scale,
@@ -656,35 +723,92 @@ def generate_kaggle():
             "height": height,
             "sampler_name": sampler_name,
             "scheduler": noise_scheduler,
-            "seed": seed,
-            "batch_size": batch_count,
+            "batch_size": 1,
+            "n_iter": 1,
+            "send_images": True,
+            "save_images": False,
+            "override_settings": {"CLIP_stop_at_last_layers": clip_skip},
         }
 
-        if data.get('enable_hr'):
-            payload["enable_hr"] = True
-            payload["hr_scale"] = float(data.get('hr_scale', 1.5))
-            payload["hr_upscaler"] = data.get('hr_upscaler', 'R-ESRGAN 4x+')
-            payload["denoising_strength"] = float(data.get('hr_denoising_strength', 0.35))
-            if data.get('hr_second_pass_steps'):
-                payload["hr_second_pass_steps"] = int(data.get('hr_second_pass_steps'))
+        enable_hr = bool(data.get('enable_hr'))
+        if enable_hr:
+            base_payload["enable_hr"] = True
+            base_payload["hr_scale"] = as_num('hr_scale', 1.5)
+            base_payload["hr_upscaler"] = data.get('hr_upscaler') or 'Latent'
+            base_payload["denoising_strength"] = as_num('hr_denoising_strength', 0.35)
+            base_payload["hr_second_pass_steps"] = as_num('hr_second_pass_steps', 15, int)
 
-        print(f"[Kaggle] Generating with payload: {payload}")
-        response = requests.post(f"{url}/sdapi/v1/txt2img", json=payload, timeout=300, headers=KAGGLE_HEADERS)
-        print(f"[Kaggle] Response status: {response.status_code}")
-
-        if response.status_code == 200:
-            result = response.json()
-            if 'images' in result and len(result['images']) > 0:
-                deduct_credits(user['id'], 1)
-                return jsonify({
-                    'success': True,
-                    'image': result['images'][0]
-                })
+        # One request per image: each stays well under the ~100 s limit of Cloudflare tunnels,
+        # and a batch can't exceed the gunicorn worker timeout (we stop before it).
+        images = []
+        last_error = None
+        started = time.time()
+        for i in range(batch_count):
+            elapsed = time.time() - started
+            if images and elapsed > 200:
+                print(f"[Kaggle] Time budget reached, returning {len(images)}/{batch_count} images")
+                break
+            payload = dict(base_payload, seed=seed + i)
+            print(f"[Kaggle] Generating {i + 1}/{batch_count}: {payload}")
+            try:
+                response = requests.post(f"{url}/sdapi/v1/txt2img", json=payload,
+                                         timeout=max(60, min(220, 280 - elapsed)), headers=KAGGLE_HEADERS)
+            except requests.exceptions.Timeout:
+                last_error = 'Generation timed out'
+                break
+            print(f"[Kaggle] Response status: {response.status_code}")
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('images'):
+                    images.append(result['images'][0])
+                else:
+                    last_error = 'No image returned by SD WebUI'
+                    break
+            elif response.status_code in (502, 503, 504, 524):
+                last_error = ('Kaggle backend did not answer in time (HTTP %d). Check that the notebook is running; '
+                              'if Hi-Res Fix is on, lower the scale or steps (tunnel limit ~100 s per image).'
+                              % response.status_code)
+                break
             else:
-                return jsonify({'error': 'No image returned by SD WebUI'}), 500
-        else:
-            error_text = response.text[:500] if response.text else 'Unknown error'
-            return jsonify({'error': f'Generation failed: {error_text}'}), 500
+                detail = response.text[:500] if response.text else 'Unknown error'
+                last_error = f'Generation failed: {detail}'
+                break
+
+        if not images:
+            status = 504 if last_error and 'timed out' in last_error else 500
+            return jsonify({'error': last_error or 'Generation failed'}), status
+
+        deduct_credits(user['id'], len(images))
+        log('INFO', f"Kaggle generate: {len(images)} image(s), user={session.get('username', '?')}")
+
+        resp = {
+            'success': True,
+            'image': images[0],
+            'images': images,
+            'info': {
+                'seed': seed,
+                'steps': steps,
+                'cfg_scale': cfg_scale,
+                'width': width,
+                'height': height,
+                'model': model,
+                'scheduler': sampler_name,
+                'noise_scheduler': noise_scheduler,
+                'clip_skip': clip_skip,
+                'batch_count': len(images),
+                'enable_hr': enable_hr,
+            },
+            'model': model,
+        }
+        if last_error:
+            resp['warning'] = f'Only {len(images)}/{batch_count} images generated: {last_error}'
+        updated_user = get_current_user()
+        if updated_user:
+            resp['credits'] = {
+                'images_remaining': updated_user['images_remaining'],
+                'is_admin': bool(updated_user['is_admin'])
+            }
+        return jsonify(resp)
 
     except requests.exceptions.Timeout:
         return jsonify({'error': 'Generation timed out'}), 504
@@ -778,21 +902,78 @@ def search_civitai():
 
 @app.route('/api/kaggle/download', methods=['POST'])
 def download_to_kaggle():
-    """Trigger model download on Kaggle backend"""
+    """Start a model download (Civitai / Hugging Face) directly on the Kaggle machine.
+
+    The notebook installs a small A1111 extension (cell 5) that exposes /abiart/download.
+    Returns a job_id; poll /api/kaggle/download/status for progress.
+    """
     try:
-        data = request.json
-        url = data.get('url', '').rstrip('/')
-        model_url = data.get('model_url', '')
-        filename = data.get('filename', '')
-        model_type = data.get('type', 'checkpoint')
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'Please log in to download models'}), 401
 
-        return jsonify({
-            'success': True,
-            'message': f'To download, run in Kaggle notebook: download_civitai_model("{model_url}", "{filename}", "{model_type}")'
-        })
+        data = request.get_json(silent=True) or {}
+        url = (data.get('url') or '').strip().rstrip('/') or get_kaggle_url()
+        model_url = (data.get('model_url') or '').strip()
+        if not url:
+            return jsonify({'error': 'Kaggle backend not configured. Start the Kaggle notebook first.'}), 400
+        if not model_url:
+            return jsonify({'error': 'No model URL provided'}), 400
 
+        model_type = (data.get('type') or 'checkpoint').lower()
+        kind = model_type if model_type in ('lora', 'vae') else 'checkpoint'
+
+        payload = {
+            'url': model_url,
+            'filename': (data.get('filename') or '').strip(),
+            'type': kind,
+            # Civitai token: from the request, else the server-side one (never needed for Hugging Face)
+            'token': (data.get('token') or os.environ.get('CIVITAI_TOKEN', '')).strip(),
+        }
+        r = requests.post(f"{url}/abiart/download", json=payload, timeout=30, headers=KAGGLE_HEADERS)
+        if r.status_code == 404:
+            return jsonify({'error': 'The Kaggle notebook is outdated: re-run it (cell 5) to enable model downloads.'}), 400
+        try:
+            result = r.json()
+        except Exception:
+            return jsonify({'error': f'Unexpected answer from Kaggle backend (HTTP {r.status_code})'}), 502
+        if r.status_code != 200 or not result.get('success'):
+            return jsonify({'error': result.get('error', f'Download refused (HTTP {r.status_code})')}), 400
+        log('INFO', f"Kaggle download started: {kind} {result.get('filename') or ''}, user={session.get('username', '?')}")
+        return jsonify({'success': True, 'job_id': result['job_id'], 'filename': result.get('filename', ''), 'type': kind})
+
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Kaggle backend did not answer in time'}), 504
     except Exception as e:
+        print(f"[Kaggle] Download exception: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/kaggle/download/status', methods=['GET'])
+def kaggle_download_status():
+    """Progress of a download started with /api/kaggle/download"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Please log in', 'state': 'error'}), 401
+    url = (request.args.get('url') or '').strip().rstrip('/') or get_kaggle_url()
+    job_id = (request.args.get('job_id') or '').strip()
+    if not url or not job_id:
+        return jsonify({'error': 'Missing url or job_id', 'state': 'error'}), 400
+    try:
+        r = requests.get(f"{url}/abiart/download/{job_id}", timeout=20, headers=KAGGLE_HEADERS)
+        result = r.json()
+    except Exception as e:
+        return jsonify({'error': f'Kaggle backend unreachable: {e}', 'state': 'unreachable'}), 502
+    if result.get('state') == 'done':
+        # make A1111 pick up the new file right away
+        refresh = {'checkpoint': '/sdapi/v1/refresh-checkpoints', 'lora': '/sdapi/v1/refresh-loras',
+                   'vae': '/sdapi/v1/refresh-vae'}.get(result.get('kind'))
+        if refresh:
+            try:
+                requests.post(f"{url}{refresh}", timeout=60, headers=KAGGLE_HEADERS)
+            except Exception as e:
+                print(f"[Kaggle] Refresh after download failed: {e}")
+    return jsonify(result), (200 if r.status_code == 200 else r.status_code)
 
 
 # ===============================
