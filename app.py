@@ -687,15 +687,67 @@ KAGGLE_REQUEST_BUDGET = 285
 
 def _kaggle_error_text(response):
     """Readable error from a txt2img response (job helper or plain requests.Response)."""
+    text = ''
     try:
         js = response.json()
         if isinstance(js, dict):
             msg = js.get('error') or js.get('detail') or js.get('errors')
             if msg:
-                return str(msg)[:500]
+                text = str(msg)[:500]
     except Exception:
         pass
-    return (response.text or 'Unknown error')[:500]
+    text = text or (response.text or 'Unknown error')[:500]
+    low = text.lower()
+    if 'always on script' in low and 'not found' in low:
+        return ("ADetailer is not installed on the Kaggle notebook: run the updated notebook "
+                "(cells 2 then 5), or turn ADetailer off.")
+    return text
+
+
+# ADetailer detection models (YOLO): the extension downloads them from Hugging Face on first use.
+# Anything else is replaced by the default, so the site can't request arbitrary files.
+KAGGLE_AD_MODELS = {
+    'face_yolov8n.pt', 'face_yolov8s.pt', 'face_yolov8m.pt', 'face_yolov9c.pt',
+    'hand_yolov8n.pt', 'hand_yolov8s.pt', 'hand_yolov9c.pt',
+    'person_yolov8n-seg.pt', 'person_yolov8s-seg.pt', 'person_yolov8m-seg.pt',
+}
+
+
+def kaggle_adetailer_tabs(data, cfg_scale):
+    """ADetailer tabs (same fields as the Modal tab) for /sdapi/v1/txt2img "alwayson_scripts".
+
+    ADetailer only honours ad_steps / ad_cfg_scale when ad_use_steps / ad_use_cfg_scale are on,
+    so they are switched on here: the Steps slider of the site really is the inpaint step count.
+    """
+    def clamp(key, default, lo, hi, cast=float):
+        try:
+            value = cast(data.get(key, default))
+        except (ValueError, TypeError):
+            value = cast(default)
+        return max(lo, min(hi, value))
+
+    try:
+        cfg = max(1.0, min(30.0, float(cfg_scale)))
+    except (ValueError, TypeError):
+        cfg = 7.0
+
+    tabs = []
+    for prefix, default_model in (('adetailer', 'face_yolov8n.pt'), ('adetailer2', 'hand_yolov8n.pt')):
+        if not data.get(f'{prefix}_enabled'):
+            continue
+        model = data.get(f'{prefix}_model')
+        tabs.append({
+            "ad_model": model if model in KAGGLE_AD_MODELS else default_model,
+            "ad_confidence": clamp(f'{prefix}_confidence', 0.3, 0.0, 1.0),
+            "ad_prompt": str(data.get(f'{prefix}_prompt') or '')[:1000],
+            "ad_negative_prompt": str(data.get(f'{prefix}_negative') or '')[:1000],
+            "ad_denoising_strength": clamp(f'{prefix}_strength', 0.4, 0.0, 1.0),
+            "ad_use_steps": True,
+            "ad_steps": clamp(f'{prefix}_steps', 25, 1, 150, int),
+            "ad_use_cfg_scale": True,
+            "ad_cfg_scale": cfg,
+        })
+    return tabs
 
 
 @app.route('/api/kaggle/generate', methods=['POST'])
@@ -784,8 +836,10 @@ def generate_kaggle():
             "seed": seed,
             "n_iter": 1,
             "batch_size": 1,
-            # Clip skip is applied for this generation only, then A1111 restores its own setting
-            "override_settings": {"CLIP_stop_at_last_layers": clip_skip},
+            # Clip skip is applied for this generation only, then A1111 restores its own setting.
+            # On SDXL checkpoints (Animagine...) A1111 ignores "Clip skip" unless sdxl_clip_l_skip is on
+            # (it then applies to the CLIP-L text encoder only; no effect on SD 1.5).
+            "override_settings": {"CLIP_stop_at_last_layers": clip_skip, "sdxl_clip_l_skip": True},
             "override_settings_restore_afterwards": True,
         }
 
@@ -796,6 +850,11 @@ def generate_kaggle():
             payload["denoising_strength"] = float(data.get('hr_denoising_strength', 0.35))
             if data.get('hr_second_pass_steps'):
                 payload["hr_second_pass_steps"] = int(data.get('hr_second_pass_steps'))
+
+        ad_tabs = kaggle_adetailer_tabs(data, cfg_scale)
+        if ad_tabs:
+            # args = [enable, skip_img2img, tab1, tab2...] : one extra dict per enabled detection tab
+            payload["alwayson_scripts"] = {"ADetailer": {"args": [True, False] + ad_tabs}}
 
         print(f"[Kaggle] Generating {batch_count} image(s) with payload: { {k: v for k, v in payload.items() if k != 'prompt'} }")
 
@@ -854,6 +913,8 @@ def generate_kaggle():
                 'height': height,
                 'clip_skip': clip_skip,
                 'batch_count': len(images),
+                'adetailer': bool(data.get('adetailer_enabled')),
+                'adetailer2': bool(data.get('adetailer2_enabled')),
             },
         }
         if len(images) < batch_count:
@@ -985,6 +1046,7 @@ def get_kaggle_options():
     upscalers = fetch('/sdapi/v1/upscalers')
     latent_modes = fetch('/sdapi/v1/latent-upscale-modes')
     loras = fetch('/sdapi/v1/loras')
+    scripts = fetch('/sdapi/v1/scripts')
     if samplers is None and loras is None:
         return jsonify({'error': 'Could not reach the Kaggle backend'}), 502
 
@@ -1002,6 +1064,8 @@ def get_kaggle_options():
         'schedulers': names(schedulers, 'label', 'name'),
         'upscalers': names(latent_modes, 'name') + [u for u in names(upscalers, 'name') if u not in names(latent_modes, 'name')],
         'loras': names(loras, 'name'),
+        # True / False when A1111 told us, None when unknown (the UI only blocks on an explicit False)
+        'adetailer': ('adetailer' in [str(x).lower() for x in (scripts.get('txt2img') or [])]) if isinstance(scripts, dict) else None,
     })
 
 

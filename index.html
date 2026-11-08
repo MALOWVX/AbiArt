@@ -746,6 +746,114 @@
                         </div>
                     </details>
 
+                    <!-- ADetailer #1 -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-face-smile"></i> ADetailer #1 — Visage</summary>
+                        <div class="sb-body">
+                            <p class="kaggle-ad-note" style="display:none;font-size:.65rem;color:var(--error);margin:0 0 .4rem">
+                                <i class="fas fa-triangle-exclamation"></i> ADetailer n'est pas installé sur ce notebook Kaggle : lancez le notebook mis à jour (cellule 2, puis 5).
+                            </p>
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="kaggleAdetailer"> Enable ADetailer
+                            </label>
+                            <div class="field">
+                                <label class="field-label">Detection Model</label>
+                                <select id="kaggleAdModel">
+                                    <option value="face_yolov8n.pt" selected>face_yolov8n (visage rapide)</option>
+                                    <option value="face_yolov8s.pt">face_yolov8s (visage précis)</option>
+                                    <option value="face_yolov9c.pt">face_yolov9c (visage, meilleur)</option>
+                                    <option value="person_yolov8n-seg.pt">person_yolov8n-seg (corps)</option>
+                                    <option value="person_yolov8s-seg.pt">person_yolov8s-seg (corps précis)</option>
+                                    <option value="hand_yolov8n.pt">hand_yolov8n (mains)</option>
+                                    <option value="hand_yolov9c.pt">hand_yolov9c (mains précis)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Confidence Threshold <input type="number"
+                                        class="field-val-input" id="kaggleAdConfidenceVal" value="0.30" min="0.0"
+                                        max="1.0" step="0.05"></label>
+                                <input type="range" id="kaggleAdConfidence" min="0.0" max="1.0" step="0.05" value="0.3">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Face Prompt</label>
+                                <input type="text" id="kaggleAdPrompt" spellcheck="false"
+                                    placeholder="detailed face, perfect eyes...">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Negative</label>
+                                <input type="text" id="kaggleAdNegative" spellcheck="false" placeholder="">
+                            </div>
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Strength <input type="number" class="field-val-input"
+                                            id="kaggleAdStrengthVal" value="0.40" min="0.1" max="1.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="kaggleAdStrength" min="0.1" max="1.0" step="0.05"
+                                        value="0.4">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="kaggleAdStepsVal" value="25" min="10" max="50" step="1"></label>
+                                    <input type="range" id="kaggleAdSteps" min="10" max="50" step="1" value="25">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- ADetailer #2 -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-hand"></i> ADetailer #2 — Mains / Corps</summary>
+                        <div class="sb-body">
+                            <p class="kaggle-ad-note" style="display:none;font-size:.65rem;color:var(--error);margin:0 0 .4rem">
+                                <i class="fas fa-triangle-exclamation"></i> ADetailer n'est pas installé sur ce notebook Kaggle : lancez le notebook mis à jour (cellule 2, puis 5).
+                            </p>
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="kaggleAdetailer2"> Enable ADetailer #2
+                            </label>
+                            <div class="field">
+                                <label class="field-label">Detection Model</label>
+                                <select id="kaggleAd2Model">
+                                    <option value="hand_yolov8n.pt" selected>hand_yolov8n (mains rapide)</option>
+                                    <option value="hand_yolov9c.pt">hand_yolov9c (mains précis)</option>
+                                    <option value="person_yolov8n-seg.pt">person_yolov8n-seg (corps)</option>
+                                    <option value="person_yolov8s-seg.pt">person_yolov8s-seg (corps précis)</option>
+                                    <option value="face_yolov8n.pt">face_yolov8n (visage)</option>
+                                    <option value="face_yolov8s.pt">face_yolov8s (visage précis)</option>
+                                    <option value="face_yolov9c.pt">face_yolov9c (visage, meilleur)</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Confidence Threshold <input type="number"
+                                        class="field-val-input" id="kaggleAd2ConfidenceVal" value="0.30" min="0.0"
+                                        max="1.0" step="0.05"></label>
+                                <input type="range" id="kaggleAd2Confidence" min="0.0" max="1.0" step="0.05" value="0.3">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Prompt</label>
+                                <input type="text" id="kaggleAd2Prompt" spellcheck="false"
+                                    placeholder="detailed hands, perfect fingers...">
+                            </div>
+                            <div class="field">
+                                <label class="field-label">Negative</label>
+                                <input type="text" id="kaggleAd2Negative" spellcheck="false" placeholder="">
+                            </div>
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Strength <input type="number" class="field-val-input"
+                                            id="kaggleAd2StrengthVal" value="0.40" min="0.1" max="1.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="kaggleAd2Strength" min="0.1" max="1.0" step="0.05"
+                                        value="0.4">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="kaggleAd2StepsVal" value="25" min="10" max="50" step="1"></label>
+                                    <input type="range" id="kaggleAd2Steps" min="10" max="50" step="1" value="25">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
                     <!-- LoRAs -->
                     <details class="sb-section">
                         <summary><i class="fas fa-puzzle-piece"></i> LoRAs</summary>
@@ -1441,6 +1549,12 @@
                 ['kaggleHiresScale', 'kaggleHiresScaleVal'],
                 ['kaggleHiresDenoising', 'kaggleHiresDenoiseVal'],
                 ['kaggleHiresSteps', 'kaggleHiresStepsVal'],
+                ['kaggleAdConfidence', 'kaggleAdConfidenceVal'],
+                ['kaggleAdStrength', 'kaggleAdStrengthVal'],
+                ['kaggleAdSteps', 'kaggleAdStepsVal'],
+                ['kaggleAd2Confidence', 'kaggleAd2ConfidenceVal'],
+                ['kaggleAd2Strength', 'kaggleAd2StrengthVal'],
+                ['kaggleAd2Steps', 'kaggleAd2StepsVal'],
             ];
             sliderPairs.forEach(([sliderId, inputId]) => {
                 const slider = document.getElementById(sliderId);
@@ -1586,6 +1700,15 @@
                 fillKaggleSelect('kaggleSampler', data.samplers, 'DPM++ 2M');
                 fillKaggleSelect('kaggleScheduler', data.schedulers, 'Karras');
                 fillKaggleSelect('kaggleHiresUpscaler', data.upscalers, 'R-ESRGAN 4x+');
+                // ADetailer: only blocked when A1111 explicitly says the extension is not loaded
+                const adOk = data.adetailer !== false;
+                ['kaggleAdetailer', 'kaggleAdetailer2'].forEach(id => {
+                    const cb = document.getElementById(id);
+                    if (!cb) return;
+                    cb.disabled = !adOk;
+                    if (!adOk) cb.checked = false;
+                });
+                document.querySelectorAll('.kaggle-ad-note').forEach(n => { n.style.display = adOk ? 'none' : 'block'; });
                 const loraSel = document.getElementById('kaggleLoraSelect');
                 if (data.loras && data.loras.length > 0) {
                     loraSel.innerHTML = data.loras.map(n => `<option value="${_escAttr(n)}">${_escAttr(n)}</option>`).join('');
@@ -2328,7 +2451,21 @@
                         hr_upscaler: document.getElementById('kaggleHiresUpscaler').value,
                         hr_scale: parseFloat(document.getElementById('kaggleHiresScale').value),
                         hr_denoising_strength: parseFloat(document.getElementById('kaggleHiresDenoising').value),
-                        hr_second_pass_steps: parseInt(document.getElementById('kaggleHiresSteps').value)
+                        hr_second_pass_steps: parseInt(document.getElementById('kaggleHiresSteps').value),
+                        adetailer_enabled: document.getElementById('kaggleAdetailer').checked,
+                        adetailer_model: document.getElementById('kaggleAdModel').value,
+                        adetailer_confidence: parseFloat(document.getElementById('kaggleAdConfidence').value),
+                        adetailer_prompt: document.getElementById('kaggleAdPrompt').value,
+                        adetailer_negative: document.getElementById('kaggleAdNegative').value,
+                        adetailer_strength: parseFloat(document.getElementById('kaggleAdStrength').value),
+                        adetailer_steps: parseInt(document.getElementById('kaggleAdSteps').value),
+                        adetailer2_enabled: document.getElementById('kaggleAdetailer2').checked,
+                        adetailer2_model: document.getElementById('kaggleAd2Model').value,
+                        adetailer2_confidence: parseFloat(document.getElementById('kaggleAd2Confidence').value),
+                        adetailer2_prompt: document.getElementById('kaggleAd2Prompt').value,
+                        adetailer2_negative: document.getElementById('kaggleAd2Negative').value,
+                        adetailer2_strength: parseFloat(document.getElementById('kaggleAd2Strength').value),
+                        adetailer2_steps: parseInt(document.getElementById('kaggleAd2Steps').value)
                     };
                     const kMerged = { images: [], info: null, credits: null, warning: '' };
                     for (let i = 0; i < kBatch; i++) {
@@ -2448,6 +2585,20 @@
                     genInfo.hr_scale = document.getElementById('kaggleHiresScale').value;
                     genInfo.hr_denoising_strength = document.getElementById('kaggleHiresDenoising').value;
                     genInfo.hr_second_pass_steps = document.getElementById('kaggleHiresSteps').value;
+                    genInfo.adetailer = document.getElementById('kaggleAdetailer').checked;
+                    genInfo.adetailer_model = document.getElementById('kaggleAdModel').value;
+                    genInfo.adetailer_confidence = parseFloat(document.getElementById('kaggleAdConfidence').value);
+                    genInfo.adetailer_prompt = document.getElementById('kaggleAdPrompt').value;
+                    genInfo.adetailer_negative = document.getElementById('kaggleAdNegative').value;
+                    genInfo.adetailer_strength = parseFloat(document.getElementById('kaggleAdStrength').value);
+                    genInfo.adetailer_steps = parseInt(document.getElementById('kaggleAdSteps').value);
+                    genInfo.adetailer2 = document.getElementById('kaggleAdetailer2').checked;
+                    genInfo.adetailer2_model = document.getElementById('kaggleAd2Model').value;
+                    genInfo.adetailer2_confidence = parseFloat(document.getElementById('kaggleAd2Confidence').value);
+                    genInfo.adetailer2_prompt = document.getElementById('kaggleAd2Prompt').value;
+                    genInfo.adetailer2_negative = document.getElementById('kaggleAd2Negative').value;
+                    genInfo.adetailer2_strength = parseFloat(document.getElementById('kaggleAd2Strength').value);
+                    genInfo.adetailer2_steps = parseInt(document.getElementById('kaggleAd2Steps').value);
                 } else if (currentBackend === 'huggingface') {
                     genInfo._model = document.getElementById('hfModel').value;
                     genInfo.guidance_scale = document.getElementById('hfGuidance').value;
@@ -2724,6 +2875,24 @@
                     uiSetSlider('kaggleHiresDenoising', 'kaggleHiresDenoiseVal', info.hr_denoising_strength);
                     uiSetSlider('kaggleHiresSteps', 'kaggleHiresStepsVal', info.hr_second_pass_steps);
                 }
+                if (info.adetailer !== undefined) {
+                    const cb1 = document.getElementById('kaggleAdetailer'); if (!cb1.disabled) cb1.checked = !!info.adetailer;
+                    if (info.adetailer_model) uiSetSelect('kaggleAdModel', info.adetailer_model);
+                    if (info.adetailer_confidence !== undefined) uiSetSlider('kaggleAdConfidence', 'kaggleAdConfidenceVal', info.adetailer_confidence);
+                    if (info.adetailer_prompt !== undefined) document.getElementById('kaggleAdPrompt').value = info.adetailer_prompt;
+                    if (info.adetailer_negative !== undefined) document.getElementById('kaggleAdNegative').value = info.adetailer_negative;
+                    if (info.adetailer_strength !== undefined) uiSetSlider('kaggleAdStrength', 'kaggleAdStrengthVal', info.adetailer_strength);
+                    if (info.adetailer_steps !== undefined) uiSetSlider('kaggleAdSteps', 'kaggleAdStepsVal', info.adetailer_steps);
+                }
+                if (info.adetailer2 !== undefined) {
+                    const cb2 = document.getElementById('kaggleAdetailer2'); if (!cb2.disabled) cb2.checked = !!info.adetailer2;
+                    if (info.adetailer2_model) uiSetSelect('kaggleAd2Model', info.adetailer2_model);
+                    if (info.adetailer2_confidence !== undefined) uiSetSlider('kaggleAd2Confidence', 'kaggleAd2ConfidenceVal', info.adetailer2_confidence);
+                    if (info.adetailer2_prompt !== undefined) document.getElementById('kaggleAd2Prompt').value = info.adetailer2_prompt;
+                    if (info.adetailer2_negative !== undefined) document.getElementById('kaggleAd2Negative').value = info.adetailer2_negative;
+                    if (info.adetailer2_strength !== undefined) uiSetSlider('kaggleAd2Strength', 'kaggleAd2StrengthVal', info.adetailer2_strength);
+                    if (info.adetailer2_steps !== undefined) uiSetSlider('kaggleAd2Steps', 'kaggleAd2StepsVal', info.adetailer2_steps);
+                }
                 if (info._loras) { activeLoRAs = JSON.parse(JSON.stringify(info._loras)); updateLorasDisplay(); }
             } else if (currentBackend === 'huggingface') {
                 uiSetSlider('hfGuidance', 'hfGuidanceVal', info.guidance_scale || info.cfg_scale);
@@ -2803,7 +2972,8 @@
             'modalControlnet', 'modalCnMode', 'modalCnWeight', 'modalCnStart', 'modalCnEnd',
             'kaggleModel', 'kaggleSampler', 'kaggleScheduler', 'kaggleWidth', 'kaggleHeight', 'kaggleSeed',
             'kaggleClipSkip', 'kaggleBatchCount', 'kaggleHiresEnable', 'kaggleHiresUpscaler',
-            'kaggleHiresScale', 'kaggleHiresDenoising', 'kaggleHiresSteps'
+            'kaggleHiresScale', 'kaggleHiresDenoising', 'kaggleHiresSteps',
+            'kaggleAdetailer', 'kaggleAdModel', 'kaggleAdConfidence', 'kaggleAdPrompt', 'kaggleAdNegative', 'kaggleAdStrength', 'kaggleAdSteps', 'kaggleAdetailer2', 'kaggleAd2Model', 'kaggleAd2Confidence', 'kaggleAd2Prompt', 'kaggleAd2Negative', 'kaggleAd2Strength', 'kaggleAd2Steps'
         ];
         const VAL_INPUT_IDS = [
             'hfGuidanceVal', 'cfgVal', 'stepsVal',
@@ -2812,7 +2982,8 @@
             'modalAd2ConfidenceVal', 'modalAd2StrengthVal', 'modalAd2StepsVal',
             'modalHiresScaleVal', 'modalHiresDenoiseVal', 'modalHiresStepsVal',
             'modalCnWeightVal', 'modalCnStartVal', 'modalCnEndVal',
-            'kaggleClipSkipVal', 'kaggleHiresScaleVal', 'kaggleHiresDenoiseVal', 'kaggleHiresStepsVal'
+            'kaggleClipSkipVal', 'kaggleHiresScaleVal', 'kaggleHiresDenoiseVal', 'kaggleHiresStepsVal',
+            'kaggleAdConfidenceVal', 'kaggleAdStrengthVal', 'kaggleAdStepsVal', 'kaggleAd2ConfidenceVal', 'kaggleAd2StrengthVal', 'kaggleAd2StepsVal'
         ];
 
         function gatherSettings() {
@@ -2854,7 +3025,8 @@
                 'modalHiresScale': 'modalHiresScaleVal', 'modalHiresDenoising': 'modalHiresDenoiseVal', 'modalHiresSteps': 'modalHiresStepsVal',
                 'modalCnWeight': 'modalCnWeightVal', 'modalCnStart': 'modalCnStartVal', 'modalCnEnd': 'modalCnEndVal',
                 'kaggleClipSkip': 'kaggleClipSkipVal', 'kaggleHiresScale': 'kaggleHiresScaleVal',
-                'kaggleHiresDenoising': 'kaggleHiresDenoiseVal', 'kaggleHiresSteps': 'kaggleHiresStepsVal'
+                'kaggleHiresDenoising': 'kaggleHiresDenoiseVal', 'kaggleHiresSteps': 'kaggleHiresStepsVal',
+                'kaggleAdConfidence': 'kaggleAdConfidenceVal', 'kaggleAdStrength': 'kaggleAdStrengthVal', 'kaggleAdSteps': 'kaggleAdStepsVal', 'kaggleAd2Confidence': 'kaggleAd2ConfidenceVal', 'kaggleAd2Strength': 'kaggleAd2StrengthVal', 'kaggleAd2Steps': 'kaggleAd2StepsVal'
             };
             Object.entries(sliderMap).forEach(([sliderId, valId]) => {
                 const slider = document.getElementById(sliderId);
@@ -2890,7 +3062,8 @@
             'modalHiresStepsVal': 'modalHiresSteps',
             'modalCnWeightVal': 'modalCnWeight', 'modalCnStartVal': 'modalCnStart', 'modalCnEndVal': 'modalCnEnd',
             'kaggleClipSkipVal': 'kaggleClipSkip', 'kaggleHiresScaleVal': 'kaggleHiresScale',
-            'kaggleHiresDenoiseVal': 'kaggleHiresDenoising', 'kaggleHiresStepsVal': 'kaggleHiresSteps'
+            'kaggleHiresDenoiseVal': 'kaggleHiresDenoising', 'kaggleHiresStepsVal': 'kaggleHiresSteps',
+            'kaggleAdConfidenceVal': 'kaggleAdConfidence', 'kaggleAdStrengthVal': 'kaggleAdStrength', 'kaggleAdStepsVal': 'kaggleAdSteps', 'kaggleAd2ConfidenceVal': 'kaggleAd2Confidence', 'kaggleAd2StrengthVal': 'kaggleAd2Strength', 'kaggleAd2StepsVal': 'kaggleAd2Steps'
         };
         document.addEventListener('input', (e) => {
             // Normalize comma decimal separator (French locale)
