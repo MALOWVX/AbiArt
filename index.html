@@ -2133,7 +2133,7 @@
             const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
             const startResp = await fetch('/api/kaggle/download', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: activeUrl, model_url, filename, type })
+                body: JSON.stringify({ url: activeUrl, model_url, filename, type, token: (document.getElementById('civitaiToken')?.value || '').trim() })
             });
             const started = await startResp.json();
             if (!started.success) throw new Error(started.error || 'Download could not start');
