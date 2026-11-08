@@ -748,7 +748,7 @@ def generate_kaggle():
                 payload["hr_second_pass_steps"] = int(data.get('hr_second_pass_steps'))
 
         print(f"[Kaggle] Generating with payload: {payload}")
-        response = requests.post(f"{url}/sdapi/v1/txt2img", json=payload, timeout=300, headers=KAGGLE_HEADERS)
+                response = kaggle_txt2img(url, payload, headers=KAGGLE_HEADERS, total_timeout=285)
         print(f"[Kaggle] Response status: {response.status_code}")
 
         if response.status_code == 200:
