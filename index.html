@@ -2308,30 +2308,55 @@
                     const kHeight = parseInt(document.getElementById('kaggleHeight').value) || 1216;
                     const kSeed = parseInt(document.getElementById('kaggleSeed').value);
                     const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
-                    response = await fetch('/api/kaggle/generate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            url: activeUrl,
-                            prompt: finalPrompt,
-                            negative_prompt: document.getElementById('negativePrompt').value,
-                            model: document.getElementById('kaggleModel').value,
-                            cfg_scale: parseFloat(document.getElementById('cfgScale').value),
-                            steps: parseInt(document.getElementById('steps').value),
-                            width: kWidth, height: kHeight,
-                            loras: activeLoRAs,
-                            scheduler: document.getElementById('kaggleSampler').value,
-                            noise_scheduler: document.getElementById('kaggleScheduler').value,
-                            seed: isNaN(kSeed) ? -1 : kSeed,
-                            clip_skip: parseInt(document.getElementById('kaggleClipSkip').value) || 1,
-                            batch_count: parseInt(document.getElementById('kaggleBatchCount').value) || 1,
-                            enable_hr: document.getElementById('kaggleHiresEnable').checked,
-                            hr_upscaler: document.getElementById('kaggleHiresUpscaler').value,
-                            hr_scale: parseFloat(document.getElementById('kaggleHiresScale').value),
-                            hr_denoising_strength: parseFloat(document.getElementById('kaggleHiresDenoising').value),
-                            hr_second_pass_steps: parseInt(document.getElementById('kaggleHiresSteps').value)
-                        })
-                    });
+                    // One request per image: each one gets the full server time limit, so a long Hi-Res
+                    // batch is no longer cut off. Seeds are consecutive (seed, seed+1, ...).
+                    const kBatch = Math.min(4, Math.max(1, parseInt(document.getElementById('kaggleBatchCount').value) || 1));
+                    const kSeedBase = (!isNaN(kSeed) && kSeed >= 0) ? kSeed : Math.floor(Math.random() * 2147483646) + 1;
+                    const kBody = {
+                        url: activeUrl,
+                        prompt: finalPrompt,
+                        negative_prompt: document.getElementById('negativePrompt').value,
+                        model: document.getElementById('kaggleModel').value,
+                        cfg_scale: parseFloat(document.getElementById('cfgScale').value),
+                        steps: parseInt(document.getElementById('steps').value),
+                        width: kWidth, height: kHeight,
+                        loras: activeLoRAs,
+                        scheduler: document.getElementById('kaggleSampler').value,
+                        noise_scheduler: document.getElementById('kaggleScheduler').value,
+                        clip_skip: parseInt(document.getElementById('kaggleClipSkip').value) || 1,
+                        enable_hr: document.getElementById('kaggleHiresEnable').checked,
+                        hr_upscaler: document.getElementById('kaggleHiresUpscaler').value,
+                        hr_scale: parseFloat(document.getElementById('kaggleHiresScale').value),
+                        hr_denoising_strength: parseFloat(document.getElementById('kaggleHiresDenoising').value),
+                        hr_second_pass_steps: parseInt(document.getElementById('kaggleHiresSteps').value)
+                    };
+                    const kMerged = { images: [], info: null, credits: null, warning: '' };
+                    for (let i = 0; i < kBatch; i++) {
+                        if (kBatch > 1) {
+                            outputArea.innerHTML = `<div style="text-align:center"><div class="loading-spinner"></div><p style="color:var(--muted);font-family:Graduate,serif">Creating image ${i + 1} / ${kBatch}...</p></div>`;
+                        }
+                        let part;
+                        try {
+                            const r = await fetch('/api/kaggle/generate', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(Object.assign({}, kBody, { seed: kSeedBase + i, batch_count: 1 }))
+                            });
+                            part = await r.json();
+                        } catch (netErr) { part = { error: netErr.message }; }
+                        if (part.error) {
+                            if (kMerged.images.length === 0) throw new Error(part.error);
+                            kMerged.warning = `Only ${kMerged.images.length}/${kBatch} image(s) generated: ${part.error}`;
+                            break;
+                        }
+                        kMerged.images.push(...(part.images || [part.image]));
+                        if (!kMerged.info) kMerged.info = part.info;
+                        if (part.credits) kMerged.credits = part.credits;
+                        if (part.warning) kMerged.warning = part.warning;
+                    }
+                    kMerged.image = kMerged.images[0];
+                    if (kMerged.info) kMerged.info.batch_count = kMerged.images.length;
+                    response = { json: async () => kMerged };
                 }
 
                 const data = await response.json();

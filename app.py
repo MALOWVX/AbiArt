@@ -681,16 +681,54 @@ def kaggle_txt2img(base_url, payload, headers=None, total_timeout=285, poll_ever
     raise requests.exceptions.Timeout(f'Kaggle generation exceeded {total_timeout}s')
 
 
+# A whole request must finish before gunicorn's 300 s limit (see gunicorn.conf.py)
+KAGGLE_REQUEST_BUDGET = 285
+
+
+def _kaggle_error_text(response):
+    """Readable error from a txt2img response (job helper or plain requests.Response)."""
+    try:
+        js = response.json()
+        if isinstance(js, dict):
+            msg = js.get('error') or js.get('detail') or js.get('errors')
+            if msg:
+                return str(msg)[:500]
+    except Exception:
+        pass
+    return (response.text or 'Unknown error')[:500]
+
+
 @app.route('/api/kaggle/generate', methods=['POST'])
 def generate_kaggle():
-    """Generate image using Kaggle backend (server-side, like Modal)"""
+    """Generate image(s) with the Kaggle backend (server-side, like Modal).
+
+    batch_count images are generated one after the other (seed, seed+1, ...), each as its own
+    job: a single A1111 batch would multiply the time and the VRAM, and only the first image
+    used to be returned. If the time budget runs out, the images already generated are
+    returned with a warning and only those are charged.
+    """
     try:
-        user, err = check_credits(1)
+        started = time.time()
+        data = request.get_json(silent=True) or {}
+
+        def num(key, default, cast=float, lo=None, hi=None):
+            try:
+                value = cast(data.get(key, default))
+            except (ValueError, TypeError):
+                value = cast(default)
+            if lo is not None:
+                value = max(lo, value)
+            if hi is not None:
+                value = min(hi, value)
+            return value
+
+        batch_count = num('batch_count', 1, int, 1, 4)
+
+        user, err = check_credits(batch_count)
         if err:
             return err
 
-        data = request.json or {}
-        url = data.get('url', '').strip() or get_kaggle_url()
+        url = (data.get('url', '') or '').strip().rstrip('/') or (get_kaggle_url() or '').rstrip('/')
         if not url:
             return jsonify({'error': 'Kaggle backend not configured. Set KAGGLE_URL on Railway or start Kaggle notebook.'}), 400
 
@@ -701,7 +739,8 @@ def generate_kaggle():
         steps = data.get('steps', 25)
         width = data.get('width', 1024)
         height = data.get('height', 1024)
-        loras = data.get('loras', [])
+        loras = data.get('loras', []) or []
+        clip_skip = num('clip_skip', 1, int, 1, 12)
 
         if not prompt:
             return jsonify({'error': 'Please provide a prompt'}), 400
@@ -710,19 +749,26 @@ def generate_kaggle():
         for lora in loras:
             full_prompt = f"<lora:{lora['name']}:{lora['weight']}> " + full_prompt
 
+        # Switch checkpoint only when it differs from the loaded one (a switch costs several seconds)
         if model:
-            print(f"[Kaggle] Switching to model: {model}")
             try:
-                model_resp = requests.post(f"{url}/sdapi/v1/options", json={
-                    "sd_model_checkpoint": model
-                }, timeout=120, headers=KAGGLE_HEADERS)
-                if model_resp.status_code == 200:
-                    time.sleep(2)
-            except Exception as e:
-                print(f"[Kaggle] Model switch error: {e}")
+                current = requests.get(f"{url}/sdapi/v1/options", timeout=15, headers=KAGGLE_HEADERS).json().get('sd_model_checkpoint', '')
+            except Exception:
+                current = ''
+            if current != model:
+                print(f"[Kaggle] Switching to model: {model}")
+                try:
+                    model_resp = requests.post(f"{url}/sdapi/v1/options", json={
+                        "sd_model_checkpoint": model
+                    }, timeout=120, headers=KAGGLE_HEADERS)
+                    if model_resp.status_code == 200:
+                        time.sleep(2)
+                except Exception as e:
+                    print(f"[Kaggle] Model switch error: {e}")
 
-        seed = int(data.get('seed', -1))
-        batch_count = int(data.get('batch_count', 1))
+        seed = num('seed', -1, int)
+        if seed < 0:
+            seed = random.randint(1, 2147483647)
         sampler_name = data.get('sampler_name', data.get('scheduler', 'Euler'))
         noise_scheduler = data.get('noise_scheduler', 'Normal')
 
@@ -736,7 +782,11 @@ def generate_kaggle():
             "sampler_name": sampler_name,
             "scheduler": noise_scheduler,
             "seed": seed,
-            "batch_size": batch_count,
+            "n_iter": 1,
+            "batch_size": 1,
+            # Clip skip is applied for this generation only, then A1111 restores its own setting
+            "override_settings": {"CLIP_stop_at_last_layers": clip_skip},
+            "override_settings_restore_afterwards": True,
         }
 
         if data.get('enable_hr'):
@@ -747,23 +797,75 @@ def generate_kaggle():
             if data.get('hr_second_pass_steps'):
                 payload["hr_second_pass_steps"] = int(data.get('hr_second_pass_steps'))
 
-        print(f"[Kaggle] Generating with payload: {payload}")
-        response = kaggle_txt2img(url, payload, headers=KAGGLE_HEADERS, total_timeout=285)
-        print(f"[Kaggle] Response status: {response.status_code}")
+        print(f"[Kaggle] Generating {batch_count} image(s) with payload: { {k: v for k, v in payload.items() if k != 'prompt'} }")
 
-        if response.status_code == 200:
-            result = response.json()
-            if 'images' in result and len(result['images']) > 0:
-                deduct_credits(user['id'], 1)
-                return jsonify({
-                    'success': True,
-                    'image': result['images'][0]
-                })
-            else:
-                return jsonify({'error': 'No image returned by SD WebUI'}), 500
-        else:
-            error_text = response.text[:500] if response.text else 'Unknown error'
-            return jsonify({'error': f'Generation failed: {error_text}'}), 500
+        images, seeds = [], []
+        last_error = ''
+        for i in range(batch_count):
+            elapsed = time.time() - started
+            # Not enough time left for one more image (estimated from the previous ones): stop here
+            if i > 0 and elapsed + (elapsed / i) * 1.15 > KAGGLE_REQUEST_BUDGET:
+                last_error = 'time limit reached'
+                print(f"[Kaggle] Stopping batch after {i} image(s) to stay under the request time limit")
+                break
+            payload["seed"] = (seed + i) % 4294967295
+            try:
+                response = kaggle_txt2img(url, payload, headers=KAGGLE_HEADERS,
+                                          total_timeout=max(20, KAGGLE_REQUEST_BUDGET - elapsed))
+            except requests.exceptions.Timeout:
+                last_error = 'generation timed out'
+                if images:
+                    break
+                return jsonify({'error': 'Generation timed out'}), 504
+            print(f"[Kaggle] Response status ({i + 1}/{batch_count}): {response.status_code}")
+
+            result = response.json() if response.status_code == 200 else {}
+            if response.status_code != 200 or not result.get('images'):
+                last_error = _kaggle_error_text(response) if response.status_code != 200 else 'No image returned by SD WebUI'
+                if images:
+                    break
+                return jsonify({'error': f'Generation failed: {last_error}'}), 500
+
+            images.append(result['images'][0])
+            real_seed = payload["seed"]
+            try:
+                raw = result.get('info')
+                info_dict = json.loads(raw) if isinstance(raw, str) else (raw or {})
+                real_seed = int(info_dict.get('seed', real_seed))
+            except Exception:
+                pass
+            seeds.append(real_seed)
+
+        deduct_credits(user['id'], len(images))
+
+        resp = {
+            'success': True,
+            'image': images[0],
+            'images': images,
+            'info': {
+                'seed': seeds[0],
+                'all_seeds': seeds,
+                'model': model,
+                'scheduler': sampler_name,
+                'noise_scheduler': noise_scheduler,
+                'steps': steps,
+                'cfg_scale': cfg_scale,
+                'width': width,
+                'height': height,
+                'clip_skip': clip_skip,
+                'batch_count': len(images),
+            },
+        }
+        if len(images) < batch_count:
+            resp['warning'] = (f"Only {len(images)}/{batch_count} image(s) generated ({last_error}). "
+                               f"Credits were charged for {len(images)} only.")
+        updated_user = get_current_user()
+        if updated_user:
+            resp['credits'] = {
+                'images_remaining': updated_user['images_remaining'],
+                'is_admin': bool(updated_user['is_admin'])
+            }
+        return jsonify(resp)
 
     except requests.exceptions.Timeout:
         return jsonify({'error': 'Generation timed out'}), 504
