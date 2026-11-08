@@ -601,8 +601,9 @@
 
                 <!-- KAGGLE SETTINGS -->
                 <div id="kaggleSettings" style="display:none">
+                    <!-- Model -->
                     <details class="sb-section" open>
-                        <summary><i class="fas fa-sliders"></i> Generation</summary>
+                        <summary><i class="fas fa-cube"></i> Model</summary>
                         <div class="sb-body">
                             <div class="field">
                                 <label class="field-label">Checkpoint</label>
@@ -612,29 +613,157 @@
                             </div>
                             <div class="grid-2">
                                 <div class="field">
+                                    <label class="field-label">Sampler</label>
+                                    <select id="kaggleSampler">
+                                        <option value="DPM++ 2M" selected>DPM++ 2M</option>
+                                        <option value="Euler a">Euler a</option>
+                                        <option value="Euler">Euler</option>
+                                        <option value="DPM++ SDE">DPM++ SDE</option>
+                                        <option value="DPM++ 2M SDE">DPM++ 2M SDE</option>
+                                        <option value="DDIM">DDIM</option>
+                                        <option value="UniPC">UniPC</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Scheduler</label>
+                                    <select id="kaggleScheduler">
+                                        <option value="Karras" selected>Karras</option>
+                                        <option value="Automatic">Automatic</option>
+                                        <option value="Normal">Normal</option>
+                                        <option value="Exponential">Exponential</option>
+                                        <option value="SGM Uniform">SGM Uniform</option>
+                                        <option value="Simple">Simple</option>
+                                        <option value="Uniform">Uniform</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- Generation params -->
+                    <details class="sb-section" open>
+                        <summary><i class="fas fa-sliders"></i> Generation</summary>
+                        <div class="sb-body">
+                            <div class="grid-2">
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="stepsVal" value="28" min="10" max="60" step="1"></label>
+                                    <input type="range" id="steps" min="10" max="60" step="1" value="28">
+                                </div>
+                                <div class="field">
                                     <label class="field-label">CFG <input type="number" class="field-val-input"
                                             id="cfgVal" value="7" min="1" max="20" step="0.1"></label>
                                     <input type="range" id="cfgScale" min="1" max="20" step="0.1" value="7">
                                 </div>
-                                <div class="field">
-                                    <label class="field-label">Steps <input type="number" class="field-val-input"
-                                            id="stepsVal" value="25" min="10" max="50" step="5"></label>
-                                    <input type="range" id="steps" min="10" max="50" step="5" value="25">
-                                </div>
                             </div>
                             <div class="field">
                                 <label class="field-label">Size</label>
-                                <select id="imgSize">
-                                    <option value="512x512">512×512</option>
-                                    <option value="512x768">512×768 Portrait</option>
-                                    <option value="768x512">768×512 Landscape</option>
-                                    <option value="768x768">768×768</option>
+                                <div class="row">
+                                    <input type="number" id="kaggleWidth" value="832" min="256" max="2048" step="64"
+                                        style="flex:1">
+                                    <span style="color:var(--muted)">×</span>
+                                    <input type="number" id="kaggleHeight" value="1216" min="256" max="2048" step="64"
+                                        style="flex:1">
+                                </div>
+                                <div class="quick-prompts" style="margin-top:.3rem">
+                                    <span class="preset-btn" onclick="setKaggleSize(1024,1024)">1024²</span>
+                                    <span class="preset-btn" onclick="setKaggleSize(832,1216)">832×1216</span>
+                                    <span class="preset-btn" onclick="setKaggleSize(1216,832)">1216×832</span>
+                                    <span class="preset-btn" onclick="setKaggleSize(768,1344)">768×1344</span>
+                                    <span class="preset-btn" onclick="setKaggleSize(512,512)">512²</span>
+                                    <span class="preset-btn" onclick="setKaggleSize(512,768)">512×768</span>
+                                </div>
+                            </div>
+                            <div class="grid-3">
+                                <div class="field">
+                                    <label class="field-label">Seed</label>
+                                    <input type="number" id="kaggleSeed" value="-1">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Clip <input type="number" class="field-val-input"
+                                            id="kaggleClipSkipVal" value="1" min="1" max="2" step="1"></label>
+                                    <input type="range" id="kaggleClipSkip" min="1" max="2" step="1" value="1">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Batch</label>
+                                    <select id="kaggleBatchCount">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Le backend Hugging Face lit encore ce sélecteur de taille (comportement historique) : ne pas supprimer -->
+                            <select id="imgSize" style="display:none">
+                                <option value="512x512">512×512</option>
+                                <option value="512x768">512×768 Portrait</option>
+                                <option value="768x512">768×512 Landscape</option>
+                                <option value="768x768">768×768</option>
+                            </select>
+                        </div>
+                    </details>
+
+                    <!-- Hi-Res Fix -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-expand"></i> Hi-Res Fix</summary>
+                        <div class="sb-body">
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.75rem">
+                                <input type="checkbox" id="kaggleHiresEnable"> Enable Hi-Res Fix
+                            </label>
+                            <div class="field">
+                                <label class="field-label">Upscaler</label>
+                                <select id="kaggleHiresUpscaler">
+                                    <option value="R-ESRGAN 4x+">R-ESRGAN 4x+</option>
+                                    <option value="R-ESRGAN 4x+ Anime6B">R-ESRGAN Anime6B</option>
+                                    <option value="Latent">Latent</option>
                                 </select>
                             </div>
-                            <div id="activeLorasSection">
-                                <label class="field-label" style="margin-bottom:.3rem">Active LoRAs</label>
-                                <div id="activeLoraList">
-                                    <p style="color:var(--muted);font-size:.7rem">No LoRAs active</p>
+                            <div class="grid-3">
+                                <div class="field">
+                                    <label class="field-label">Scale <input type="number" class="field-val-input"
+                                            id="kaggleHiresScaleVal" value="1.50" min="1.25" max="2.0"
+                                            step="0.05"></label>
+                                    <input type="range" id="kaggleHiresScale" min="1.25" max="2.0" step="0.05"
+                                        value="1.5">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Denoise <input type="number" class="field-val-input"
+                                            id="kaggleHiresDenoiseVal" value="0.35" min="0.1" max="0.7"
+                                            step="0.05"></label>
+                                    <input type="range" id="kaggleHiresDenoising" min="0.1" max="0.7" step="0.05"
+                                        value="0.35">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label">Steps <input type="number" class="field-val-input"
+                                            id="kaggleHiresStepsVal" value="15" min="5" max="30" step="1"></label>
+                                    <input type="range" id="kaggleHiresSteps" min="5" max="30" step="1" value="15">
+                                </div>
+                            </div>
+                            <p style="font-size:.65rem;color:var(--muted);margin:.3rem 0 0">
+                                <i class="fas fa-info-circle"></i> Sur GPU T4, le Hi-Res peut approcher la limite de ~100 s par image du tunnel : gardez Scale ≤ 1.5.
+                            </p>
+                        </div>
+                    </details>
+
+                    <!-- LoRAs -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-puzzle-piece"></i> LoRAs</summary>
+                        <div class="sb-body">
+                            <label class="field-label" style="margin-bottom:.2rem">Active</label>
+                            <div id="kaggleActiveLoraList">
+                                <p style="color:var(--muted);font-size:.7rem">No LoRAs active</p>
+                            </div>
+                            <div style="margin-top:.4rem;border-top:1px solid var(--muted);padding-top:.4rem">
+                                <label class="field-label" style="margin-bottom:.2rem">Available on Kaggle</label>
+                                <div class="row">
+                                    <select id="kaggleLoraSelect" style="flex:1">
+                                        <option value="">No LoRA found</option>
+                                    </select>
+                                    <button class="btn btn-sm" onclick="addKaggleLora()" title="Add"><i
+                                            class="fas fa-plus"></i></button>
+                                    <button class="btn btn-sm" onclick="loadKaggleOptions(true)" title="Rescan LoRAs"><i
+                                            class="fas fa-rotate"></i></button>
                                 </div>
                             </div>
                         </div>
@@ -1308,6 +1437,10 @@
                 ['modalCnWeight', 'modalCnWeightVal'],
                 ['modalCnStart', 'modalCnStartVal'],
                 ['modalCnEnd', 'modalCnEndVal'],
+                ['kaggleClipSkip', 'kaggleClipSkipVal'],
+                ['kaggleHiresScale', 'kaggleHiresScaleVal'],
+                ['kaggleHiresDenoising', 'kaggleHiresDenoiseVal'],
+                ['kaggleHiresSteps', 'kaggleHiresStepsVal'],
             ];
             sliderPairs.forEach(([sliderId, inputId]) => {
                 const slider = document.getElementById(sliderId);
@@ -1386,6 +1519,30 @@
             }
         }
 
+        // Keep the current selection (or the one saved in localStorage) when a <select> is refilled from the backend
+        function fillKaggleSelect(id, values, fallbackValue) {
+            const sel = document.getElementById(id);
+            if (!sel || !values || values.length === 0) return;
+            let saved = {};
+            try { saved = JSON.parse(localStorage.getItem('abiart_last_settings') || '{}'); } catch (e) { }
+            const wanted = [sel.value, saved[id], fallbackValue];
+            sel.innerHTML = values.map(v => `<option value="${_escAttr(v)}">${_escAttr(v)}</option>`).join('');
+            const pick = wanted.find(w => w && values.includes(w));
+            sel.value = pick !== undefined ? pick : values[0];
+        }
+
+        function _escAttr(v) {
+            return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function setKaggleSize(w, h) {
+            document.getElementById('kaggleWidth').value = w;
+            document.getElementById('kaggleHeight').value = h;
+            autoSaveSettings();
+        }
+
+        function seedInputId() { return currentBackend === 'kaggle' ? 'kaggleSeed' : 'modalSeed'; }
+
         async function loadKaggleModels() {
             updateStatus('Connecting to Kaggle...', 'warning');
             const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
@@ -1398,7 +1555,13 @@
                 const data = await response.json();
                 if (data.models && data.models.length > 0) {
                     updateStatus('Kaggle Ready', 'success');
-                    document.getElementById('kaggleModel').innerHTML = data.models.map(m => `<option value="${m.title}">${m.model_name}</option>`).join('');
+                    const sel = document.getElementById('kaggleModel');
+                    let saved = {};
+                    try { saved = JSON.parse(localStorage.getItem('abiart_last_settings') || '{}'); } catch (e) { }
+                    const previous = sel.value || saved.kaggleModel;
+                    sel.innerHTML = data.models.map(m => `<option value="${_escAttr(m.title)}">${_escAttr(m.model_name)}</option>`).join('');
+                    if (previous && data.models.some(m => m.title === previous)) sel.value = previous;
+                    loadKaggleOptions();
                 } else {
                     updateStatus('Kaggle Offline', 'error');
                     if (data.error) showToast(data.error);
@@ -1407,6 +1570,78 @@
                 updateStatus('Kaggle Offline', 'error');
                 console.error('Failed to load Kaggle models:', e);
             }
+        }
+
+        // Samplers, schedulers, Hi-Res upscalers and LoRAs, straight from the A1111 backend
+        async function loadKaggleOptions(refreshLoras = false) {
+            const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
+            try {
+                const response = await fetch('/api/kaggle/options', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: activeUrl, refresh_loras: refreshLoras === true })
+                });
+                const data = await response.json();
+                if (data.error) { console.warn('[Kaggle] options:', data.error); return; }
+                fillKaggleSelect('kaggleSampler', data.samplers, 'DPM++ 2M');
+                fillKaggleSelect('kaggleScheduler', data.schedulers, 'Karras');
+                fillKaggleSelect('kaggleHiresUpscaler', data.upscalers, 'R-ESRGAN 4x+');
+                const loraSel = document.getElementById('kaggleLoraSelect');
+                if (data.loras && data.loras.length > 0) {
+                    loraSel.innerHTML = data.loras.map(n => `<option value="${_escAttr(n)}">${_escAttr(n)}</option>`).join('');
+                } else {
+                    loraSel.innerHTML = '<option value="">No LoRA found</option>';
+                }
+                if (refreshLoras === true) showToast(`${(data.loras || []).length} LoRA(s) found`, 'success');
+            } catch (e) {
+                console.warn('[Kaggle] Could not load options:', e);
+            }
+        }
+
+        // ----- Kaggle LoRAs (activeLoRAs) -----
+        function addKaggleLora() {
+            const name = document.getElementById('kaggleLoraSelect').value;
+            if (!name) { showToast('No LoRA selected'); return; }
+            if (activeLoRAs.some(l => l.name === name)) { showToast('LoRA already active'); return; }
+            let trigger = '';
+            try {
+                const stored = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                if (Array.isArray(stored[name]) && stored[name].length) trigger = stored[name].join(', ');
+            } catch (e) { }
+            activeLoRAs.push({ name, weight: 0.8, trigger });
+            updateLorasDisplay();
+            autoSaveSettings();
+        }
+
+        function removeKaggleLora(i) { activeLoRAs.splice(i, 1); updateLorasDisplay(); autoSaveSettings(); }
+
+        function updateKaggleLoraWeight(i, v) {
+            activeLoRAs[i].weight = parseFloat(v);
+            const spans = document.querySelectorAll('#kaggleActiveLoraList .lora-weight-val');
+            if (spans[i]) spans[i].textContent = parseFloat(v).toFixed(1);
+            autoSaveSettings();
+        }
+
+        function updateKaggleLoraTrigger(i, v) { activeLoRAs[i].trigger = v; autoSaveSettings(); }
+
+        function updateLorasDisplay() {
+            const container = document.getElementById('kaggleActiveLoraList');
+            if (!container) return;
+            if (activeLoRAs.length === 0) {
+                container.innerHTML = '<p style="color:var(--muted);font-size:.7rem">No LoRAs active</p>';
+                return;
+            }
+            container.innerHTML = activeLoRAs.map((lora, i) => `
+                <div class="lora-item"><div class="lora-row">
+                    <span class="lora-name">${_escAttr(lora.name)}</span>
+                    <button onclick="removeKaggleLora(${i})" style="background:none;border:none;color:var(--error);cursor:pointer">✕</button>
+                </div><div class="row">
+                    <input type="range" min="0.1" max="1.5" step="0.1" value="${lora.weight}" oninput="updateKaggleLoraWeight(${i},this.value)" style="flex:1">
+                    <span class="lora-weight-val" style="font-size:.7rem;color:var(--muted);min-width:1.5rem">${Number(lora.weight).toFixed(1)}</span>
+                </div>
+                <div style="margin-top:.2rem">
+                    <input type="text" placeholder="Trigger words (auto-appended to prompt)" spellcheck="false" value="${_escAttr(lora.trigger || '')}" oninput="updateKaggleLoraTrigger(${i},this.value)" style="padding:.2rem;font-size:.65rem;border-color:var(--dim)">
+                </div></div>`).join('');
         }
 
         // ========== CIVITAI ==========
@@ -1770,14 +2005,71 @@
             document.getElementById('confirmDownloadBtn').onclick = () => { currentBackend === 'modal' ? downloadToModal(model) : downloadCivitaiModel(model); };
         }
 
+        // Download a model on the Kaggle machine and wait for it (progress is polled every 2 s)
+        async function kaggleDownloadAndWait({ model_url, filename, type }, onProgress) {
+            const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
+            const startResp = await fetch('/api/kaggle/download', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: activeUrl, model_url, filename, type })
+            });
+            const started = await startResp.json();
+            if (!started.success) throw new Error(started.error || 'Download could not start');
+            const label = started.filename || filename || 'model';
+            const fmtGB = b => (b / 1073741824).toFixed(2);
+            let failures = 0;
+            for (; ;) {
+                await new Promise(r => setTimeout(r, 2000));
+                let st;
+                try {
+                    const r = await fetch(`/api/kaggle/download/status?job_id=${encodeURIComponent(started.job_id)}&url=${encodeURIComponent(activeUrl)}`);
+                    st = await r.json();
+                } catch (e) { st = { state: 'unreachable' }; }
+                if (st.state === 'unreachable') {
+                    if (++failures >= 5) throw new Error('Lost connection to the Kaggle backend');
+                    continue;
+                }
+                failures = 0;
+                if (st.state === 'error') throw new Error(st.error || 'Download failed');
+                const pct = st.total ? Math.round(100 * st.done / st.total) : null;
+                const msg = st.state === 'done'
+                    ? `✓ ${st.filename || label}`
+                    : `Downloading ${st.filename || label}: ${pct !== null ? pct + '% (' + fmtGB(st.done) + ' / ' + fmtGB(st.total) + ' GB)' : fmtGB(st.done) + ' GB'}`;
+                if (onProgress) onProgress(msg);
+                updateStatus(st.state === 'done' ? 'Kaggle Ready' : (pct !== null ? `Downloading ${pct}%` : 'Downloading...'), st.state === 'done' ? 'success' : 'warning');
+                if (st.state === 'done') return { success: true, filename: st.filename || label, kind: st.kind || type };
+            }
+        }
+
+        // After a Kaggle download: remember LoRA trigger words and refresh the lists
+        function afterKaggleDownload(result, trainedWords) {
+            if (result.kind === 'lora') {
+                if (trainedWords && trainedWords.length > 0) {
+                    try {
+                        const stored = JSON.parse(localStorage.getItem('abiart_lora_triggers') || '{}');
+                        stored[result.filename] = trainedWords;
+                        stored[result.filename.replace(/\.[^.]+$/, '')] = trainedWords; // A1111 names LoRAs without extension
+                        localStorage.setItem('abiart_lora_triggers', JSON.stringify(stored));
+                    } catch (e) { console.error('Error saving trigger words', e); }
+                }
+                loadKaggleOptions(true);
+            } else {
+                loadKaggleModels();
+            }
+        }
+
         async function downloadCivitaiModel(model) {
-            closeDownloadModal(); showToast('Downloading model...', 'success');
+            closeDownloadModal(); showToast('Downloading model to Kaggle...', 'success'); updateStatus('Downloading...', 'warning');
             try {
-                const response = await fetch('/api/kaggle/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: kaggleUrl, model_url: model.download_url, filename: model.filename, type: model.type.toLowerCase() }) });
-                const data = await response.json();
-                if (data.success) { showToast('Model downloaded!', 'success'); if (model.type === 'Checkpoint') loadKaggleModels(); }
-                else throw new Error(data.error);
-            } catch (e) { showToast('Download failed: ' + e.message); }
+                const type = model.type.toLowerCase() === 'lora' ? 'lora' : 'checkpoint';
+                const result = await kaggleDownloadAndWait({ model_url: model.download_url, filename: model.filename, type }, msg => {
+                    const el = document.getElementById('downloadStatus'), tx = document.getElementById('downloadStatusText');
+                    if (el && tx) { el.style.display = 'block'; tx.textContent = msg; }
+                });
+                afterKaggleDownload(result, model.trained_words);
+                showToast(`${type === 'lora' ? 'LoRA' : 'Checkpoint'} downloaded to Kaggle!`, 'success');
+                const el = document.getElementById('downloadStatus');
+                if (el) setTimeout(() => { el.style.display = 'none'; }, 3000);
+            } catch (e) { updateStatus('Download failed', 'error'); showToast('Download failed: ' + e.message); }
         }
 
         // Detect Civitai base domain from a URL (supports civitai.com and civitai.red)
@@ -1822,8 +2114,16 @@
                 let downloadUrl = `${civitaiBase}/api/download/models/${modelVersionId}`;
                 if (token) downloadUrl += `?token=${token}`;
                 statusText.textContent = `Downloading ${isLora ? 'LoRA' : 'checkpoint'}: ${filename}...`;
-                const response = await fetch('/api/modal/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_url: downloadUrl, filename, is_lora: isLora }) });
-                const data = await response.json();
+                let data;
+                if (currentBackend === 'kaggle') {
+                    const kr = await kaggleDownloadAndWait({ model_url: downloadUrl, filename, type: isLora ? 'lora' : 'checkpoint' }, msg => { statusText.textContent = msg; });
+                    const tw = (modelInfo && (modelInfo.modelVersions || []).find(v => v.id == modelVersionId))?.trainedWords || (modelInfo?.modelVersions?.[0]?.trainedWords) || [];
+                    afterKaggleDownload(kr, tw);
+                    data = { success: true };
+                } else {
+                    const response = await fetch('/api/modal/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_url: downloadUrl, filename, is_lora: isLora }) });
+                    data = await response.json();
+                }
                 if (data.success) {
                     // Save trainedWords to localStorage if available
                     if (isLora && modelInfo) {
@@ -1840,7 +2140,7 @@
 
                     statusText.textContent = `✓ Downloaded ${filename}`;
                     showToast(`${isLora ? 'LoRA' : 'Model'} downloaded!`, 'success');
-                    refreshModalModels();
+                    if (currentBackend !== 'kaggle') refreshModalModels();
                     document.getElementById('civitaiUrl').value = '';
                     document.getElementById('civitaiFilename').value = '';
                     document.getElementById('civitaiIsLora').checked = false;
@@ -1994,25 +2294,45 @@
                         })
                     });
                 } else {
-                    const [width, height] = document.getElementById('imgSize').value.split('x').map(Number);
+                    // Trigger words of active LoRAs are appended to the prompt (same as Modal)
+                    finalPrompt = prompt;
+                    const kTriggers = activeLoRAs
+                        .filter(l => l.trigger && l.trigger.trim() !== '')
+                        .map(l => l.trigger.trim().replace(/,+$/, ''));
+                    if (kTriggers.length > 0) finalPrompt = prompt.replace(/[,\s]+$/, '') + ', ' + kTriggers.join(', ') + ',';
+                    const kWidth = parseInt(document.getElementById('kaggleWidth').value) || 832;
+                    const kHeight = parseInt(document.getElementById('kaggleHeight').value) || 1216;
+                    const kSeed = parseInt(document.getElementById('kaggleSeed').value);
                     const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
                     response = await fetch('/api/kaggle/generate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             url: activeUrl,
-                            prompt,
+                            prompt: finalPrompt,
                             negative_prompt: document.getElementById('negativePrompt').value,
                             model: document.getElementById('kaggleModel').value,
                             cfg_scale: parseFloat(document.getElementById('cfgScale').value),
                             steps: parseInt(document.getElementById('steps').value),
-                            width, height, loras: activeLoRAs
+                            width: kWidth, height: kHeight,
+                            loras: activeLoRAs,
+                            scheduler: document.getElementById('kaggleSampler').value,
+                            noise_scheduler: document.getElementById('kaggleScheduler').value,
+                            seed: isNaN(kSeed) ? -1 : kSeed,
+                            clip_skip: parseInt(document.getElementById('kaggleClipSkip').value) || 1,
+                            batch_count: parseInt(document.getElementById('kaggleBatchCount').value) || 1,
+                            enable_hr: document.getElementById('kaggleHiresEnable').checked,
+                            hr_upscaler: document.getElementById('kaggleHiresUpscaler').value,
+                            hr_scale: parseFloat(document.getElementById('kaggleHiresScale').value),
+                            hr_denoising_strength: parseFloat(document.getElementById('kaggleHiresDenoising').value),
+                            hr_second_pass_steps: parseInt(document.getElementById('kaggleHiresSteps').value)
                         })
                     });
                 }
 
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
+                if (data.warning) showToast(data.warning);
                 currentImage = data.image;
                 const images = data.images || [data.image];
 
@@ -2086,13 +2406,19 @@
                 } else if (currentBackend === 'kaggle') {
                     genInfo._loras = JSON.parse(JSON.stringify(activeLoRAs));
                     genInfo._model = document.getElementById('kaggleModel').value;
+                    genInfo.model = genInfo._model;
                     genInfo.steps = document.getElementById('steps').value;
                     genInfo.cfg_scale = document.getElementById('cfgScale').value;
-                    const sizeArr = document.getElementById('imgSize').value.split('x');
-                    if (sizeArr.length === 2) {
-                        genInfo.width = sizeArr[0];
-                        genInfo.height = sizeArr[1];
-                    }
+                    genInfo.width = data.info && data.info.width ? data.info.width : document.getElementById('kaggleWidth').value;
+                    genInfo.height = data.info && data.info.height ? data.info.height : document.getElementById('kaggleHeight').value;
+                    genInfo.scheduler = document.getElementById('kaggleSampler').value;
+                    genInfo.noise_scheduler = document.getElementById('kaggleScheduler').value;
+                    genInfo.clip_skip = document.getElementById('kaggleClipSkip').value;
+                    genInfo.enable_hr = document.getElementById('kaggleHiresEnable').checked;
+                    genInfo.hr_upscaler = document.getElementById('kaggleHiresUpscaler').value;
+                    genInfo.hr_scale = document.getElementById('kaggleHiresScale').value;
+                    genInfo.hr_denoising_strength = document.getElementById('kaggleHiresDenoising').value;
+                    genInfo.hr_second_pass_steps = document.getElementById('kaggleHiresSteps').value;
                 } else if (currentBackend === 'huggingface') {
                     genInfo._model = document.getElementById('hfModel').value;
                     genInfo.guidance_scale = document.getElementById('hfGuidance').value;
@@ -2102,7 +2428,7 @@
                     const bar = document.getElementById('genInfoBar');
                     const parts = [];
                     parts.push(`<strong>Model:</strong> ${info.model || 'SDXL'}`);
-                    parts.push(`<strong>Seed:</strong> <span style="cursor:pointer;text-decoration:underline" onclick="document.getElementById('modalSeed').value=${info.seed || -1}" title="Click to reuse">${info.seed || '?'}</span>`);
+                    parts.push(`<strong>Seed:</strong> <span style="cursor:pointer;text-decoration:underline" onclick="document.getElementById(seedInputId()).value=${info.seed || -1}" title="Click to reuse">${info.seed || '?'}</span>`);
                     parts.push(`<strong>Sampler:</strong> ${info.scheduler || 'Euler'}`);
                     parts.push(`<strong>Steps:</strong> ${info.steps || 25}`);
                     parts.push(`<strong>CFG:</strong> ${info.cfg_scale || 7}`);
@@ -2112,7 +2438,11 @@
                     if (info.adetailer) { let adLabel = 'ADetailer: \u2713'; if (info.adetailer2) adLabel += ' (x2)'; parts.push(`<strong>${adLabel}</strong>`); }
                     if (info.controlnet_enabled) parts.push(`<strong>ControlNet:</strong> \u2713`);
                     if (info.batch_count > 1) parts.push(`<strong>Batch:</strong> ${info.batch_count}`);
-                    if (document.getElementById('modalHiresEnable') && document.getElementById('modalHiresEnable').checked) parts.push(`<strong>Hi-Res:</strong> ✓`);
+                    const hrChecked = currentBackend === 'kaggle'
+                        ? document.getElementById('kaggleHiresEnable').checked
+                        : (document.getElementById('modalHiresEnable') && document.getElementById('modalHiresEnable').checked);
+                    if (hrChecked) parts.push(`<strong>Hi-Res:</strong> ✓`);
+                    if (currentBackend === 'kaggle' && info.noise_scheduler) parts.push(`<strong>Scheduler:</strong> ${info.noise_scheduler}`);
                     parts.push(`<button class="btn btn-sm" onclick="recycleParams(0)" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
                     bar.innerHTML = parts.join(' &nbsp;|&nbsp; ');
                     bar.style.display = 'block';
@@ -2260,7 +2590,7 @@
             const bar = document.getElementById('genInfoBar');
             const parts = [];
             parts.push(`<strong>Model:</strong> ${info.model || 'SDXL'}`);
-            parts.push(`<strong>Seed:</strong> <span style="cursor:pointer;text-decoration:underline" onclick="document.getElementById('modalSeed').value=${info.seed || -1}">${info.seed || '?'}</span>`);
+            parts.push(`<strong>Seed:</strong> <span style="cursor:pointer;text-decoration:underline" onclick="document.getElementById(seedInputId()).value=${info.seed || -1}">${info.seed || '?'}</span>`);
             parts.push(`<strong>Sampler:</strong> ${info.scheduler || 'Euler'}`);
             parts.push(`<strong>Steps:</strong> ${info.steps || 25}`);
             parts.push(`<strong>CFG:</strong> ${info.cfg_scale || 7}`);
@@ -2349,10 +2679,22 @@
                     }
                 }
             } else if (currentBackend === 'kaggle') {
+                if (info.seed !== undefined) document.getElementById('kaggleSeed').value = info.seed;
                 uiSetSlider('steps', 'stepsVal', info.steps);
                 uiSetSlider('cfgScale', 'cfgVal', info.cfg_scale);
-                if (info.width && info.height) uiSetSelect('imgSize', `${info.width}x${info.height}`);
+                if (info.width) document.getElementById('kaggleWidth').value = info.width;
+                if (info.height) document.getElementById('kaggleHeight').value = info.height;
+                uiSetSelect('kaggleSampler', info.scheduler);
+                uiSetSelect('kaggleScheduler', info.noise_scheduler);
+                uiSetSlider('kaggleClipSkip', 'kaggleClipSkipVal', info.clip_skip);
                 uiSetSelect('kaggleModel', info._model || info.model);
+                if (info.enable_hr !== undefined) {
+                    document.getElementById('kaggleHiresEnable').checked = !!info.enable_hr;
+                    if (info.hr_upscaler) uiSetSelect('kaggleHiresUpscaler', info.hr_upscaler);
+                    uiSetSlider('kaggleHiresScale', 'kaggleHiresScaleVal', info.hr_scale);
+                    uiSetSlider('kaggleHiresDenoising', 'kaggleHiresDenoiseVal', info.hr_denoising_strength);
+                    uiSetSlider('kaggleHiresSteps', 'kaggleHiresStepsVal', info.hr_second_pass_steps);
+                }
                 if (info._loras) { activeLoRAs = JSON.parse(JSON.stringify(info._loras)); updateLorasDisplay(); }
             } else if (currentBackend === 'huggingface') {
                 uiSetSlider('hfGuidance', 'hfGuidanceVal', info.guidance_scale || info.cfg_scale);
@@ -2429,7 +2771,10 @@
             'modalHiresEnable', 'modalHiresUpscaler', 'modalHiresScale',
             'modalHiresDenoising', 'modalHiresSteps',
             'modalVae',
-            'modalControlnet', 'modalCnMode', 'modalCnWeight', 'modalCnStart', 'modalCnEnd'
+            'modalControlnet', 'modalCnMode', 'modalCnWeight', 'modalCnStart', 'modalCnEnd',
+            'kaggleModel', 'kaggleSampler', 'kaggleScheduler', 'kaggleWidth', 'kaggleHeight', 'kaggleSeed',
+            'kaggleClipSkip', 'kaggleBatchCount', 'kaggleHiresEnable', 'kaggleHiresUpscaler',
+            'kaggleHiresScale', 'kaggleHiresDenoising', 'kaggleHiresSteps'
         ];
         const VAL_INPUT_IDS = [
             'hfGuidanceVal', 'cfgVal', 'stepsVal',
@@ -2437,7 +2782,8 @@
             'modalAdStrengthVal', 'modalAdStepsVal',
             'modalAd2ConfidenceVal', 'modalAd2StrengthVal', 'modalAd2StepsVal',
             'modalHiresScaleVal', 'modalHiresDenoiseVal', 'modalHiresStepsVal',
-            'modalCnWeightVal', 'modalCnStartVal', 'modalCnEndVal'
+            'modalCnWeightVal', 'modalCnStartVal', 'modalCnEndVal',
+            'kaggleClipSkipVal', 'kaggleHiresScaleVal', 'kaggleHiresDenoiseVal', 'kaggleHiresStepsVal'
         ];
 
         function gatherSettings() {
@@ -2450,6 +2796,7 @@
             });
             settings._backend = currentBackend;
             settings._modalLoras = JSON.parse(JSON.stringify(activeModalLoras));
+            settings._kaggleLoras = JSON.parse(JSON.stringify(activeLoRAs));
             return settings;
         }
 
@@ -2476,7 +2823,9 @@
                 'modalAdConfidence': 'modalAdConfidenceVal', 'modalAdStrength': 'modalAdStrengthVal', 'modalAdSteps': 'modalAdStepsVal',
                 'modalAd2Confidence': 'modalAd2ConfidenceVal', 'modalAd2Strength': 'modalAd2StrengthVal', 'modalAd2Steps': 'modalAd2StepsVal',
                 'modalHiresScale': 'modalHiresScaleVal', 'modalHiresDenoising': 'modalHiresDenoiseVal', 'modalHiresSteps': 'modalHiresStepsVal',
-                'modalCnWeight': 'modalCnWeightVal', 'modalCnStart': 'modalCnStartVal', 'modalCnEnd': 'modalCnEndVal'
+                'modalCnWeight': 'modalCnWeightVal', 'modalCnStart': 'modalCnStartVal', 'modalCnEnd': 'modalCnEndVal',
+                'kaggleClipSkip': 'kaggleClipSkipVal', 'kaggleHiresScale': 'kaggleHiresScaleVal',
+                'kaggleHiresDenoising': 'kaggleHiresDenoiseVal', 'kaggleHiresSteps': 'kaggleHiresStepsVal'
             };
             Object.entries(sliderMap).forEach(([sliderId, valId]) => {
                 const slider = document.getElementById(sliderId);
@@ -2489,6 +2838,10 @@
             if (settings._modalLoras) {
                 activeModalLoras = settings._modalLoras;
                 updateActiveLorasDisplay();
+            }
+            if (settings._kaggleLoras) {
+                activeLoRAs = settings._kaggleLoras;
+                updateLorasDisplay();
             }
         }
 
@@ -2506,7 +2859,9 @@
             'modalAd2ConfidenceVal': 'modalAd2Confidence', 'modalAd2StrengthVal': 'modalAd2Strength', 'modalAd2StepsVal': 'modalAd2Steps',
             'modalHiresScaleVal': 'modalHiresScale', 'modalHiresDenoiseVal': 'modalHiresDenoising',
             'modalHiresStepsVal': 'modalHiresSteps',
-            'modalCnWeightVal': 'modalCnWeight', 'modalCnStartVal': 'modalCnStart', 'modalCnEndVal': 'modalCnEnd'
+            'modalCnWeightVal': 'modalCnWeight', 'modalCnStartVal': 'modalCnStart', 'modalCnEndVal': 'modalCnEnd',
+            'kaggleClipSkipVal': 'kaggleClipSkip', 'kaggleHiresScaleVal': 'kaggleHiresScale',
+            'kaggleHiresDenoiseVal': 'kaggleHiresDenoising', 'kaggleHiresStepsVal': 'kaggleHiresSteps'
         };
         document.addEventListener('input', (e) => {
             // Normalize comma decimal separator (French locale)
