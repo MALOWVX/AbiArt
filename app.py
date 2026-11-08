@@ -713,7 +713,7 @@ KAGGLE_AD_MODELS = {
 }
 
 
-def kaggle_adetailer_tabs(data, cfg_scale):
+def kaggle_adetailer_tabs(data, cfg_scale, checkpoint=''):
     """ADetailer tabs (same fields as the Modal tab) for /sdapi/v1/txt2img "alwayson_scripts".
 
     ADetailer only honours ad_steps / ad_cfg_scale when ad_use_steps / ad_use_cfg_scale are on,
@@ -736,7 +736,7 @@ def kaggle_adetailer_tabs(data, cfg_scale):
         if not data.get(f'{prefix}_enabled'):
             continue
         model = data.get(f'{prefix}_model')
-        tabs.append({
+        tab = {
             "ad_model": model if model in KAGGLE_AD_MODELS else default_model,
             "ad_confidence": clamp(f'{prefix}_confidence', 0.3, 0.0, 1.0),
             "ad_prompt": str(data.get(f'{prefix}_prompt') or '')[:1000],
@@ -746,7 +746,12 @@ def kaggle_adetailer_tabs(data, cfg_scale):
             "ad_steps": clamp(f'{prefix}_steps', 25, 1, 150, int),
             "ad_use_cfg_scale": True,
             "ad_cfg_scale": cfg,
-        })
+        }
+        # Pin the ADetailer pass to the checkpoint of the generation that was started
+        if checkpoint:
+            tab["ad_use_checkpoint"] = True
+            tab["ad_checkpoint"] = checkpoint
+        tabs.append(tab)
     return tabs
 
 
@@ -851,7 +856,7 @@ def generate_kaggle():
             if data.get('hr_second_pass_steps'):
                 payload["hr_second_pass_steps"] = int(data.get('hr_second_pass_steps'))
 
-        ad_tabs = kaggle_adetailer_tabs(data, cfg_scale)
+        ad_tabs = kaggle_adetailer_tabs(data, cfg_scale, model)
         if ad_tabs:
             # args = [enable, skip_img2img, tab1, tab2...] : one extra dict per enabled detection tab
             payload["alwayson_scripts"] = {"ADetailer": {"args": [True, False] + ad_tabs}}
