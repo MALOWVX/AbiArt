@@ -1126,14 +1126,16 @@ def download_to_kaggle():
         # never to a URL that merely came from the browser.
         # 1) token typed in the site's "Civitai API Token" field (sent by the browser)
         civitai_token = (data.get('token', '') or '').strip()
+        token_source = 'the site field' if civitai_token else 'none'
         # 2) otherwise the server-side CIVITAI_TOKEN, only for the Kaggle backend registered on the server
         if not civitai_token:
             env_token = os.environ.get('CIVITAI_TOKEN', '').strip()
             if env_token and base_url == (get_kaggle_url() or '').rstrip('/'):
                 civitai_token = env_token
+                token_source = 'server variable CIVITAI_TOKEN (the field was empty)'
         if civitai_token:
             payload['token'] = civitai_token
-        print(f"[Kaggle] Civitai token sent to the notebook: {'yes' if civitai_token else 'NO'}")
+        print(f"[Kaggle] Civitai token sent to the notebook: {token_source}")
 
         print(f"[Kaggle] Starting {kind} download: {filename or model_url[:80]}")
         r = requests.post(f'{base_url}/abiart/download', json=payload, headers=KAGGLE_HEADERS, timeout=30)
