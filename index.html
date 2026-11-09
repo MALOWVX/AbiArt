@@ -1242,7 +1242,9 @@
                                 <input type="text" id="civitaiFilename" placeholder="model_name.safetensors">
                             </div>
                             <div class="field">
-                                <input type="text" id="civitaiToken" placeholder="Civitai API Token (optional)">
+                                <input type="text" id="civitaiToken" placeholder="Civitai API Token (optional)" autocomplete="off"
+                                    oninput="try{localStorage.setItem('abiart_civitai_token',this.value.trim())}catch(e){}">
+                                <script>try{document.getElementById('civitaiToken').value=localStorage.getItem('abiart_civitai_token')||''}catch(e){}</script>
                             </div>
                             <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.7rem">
                                 <input type="checkbox" id="civitaiIsLora">

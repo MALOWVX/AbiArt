@@ -1133,6 +1133,7 @@ def download_to_kaggle():
                 civitai_token = env_token
         if civitai_token:
             payload['token'] = civitai_token
+        print(f"[Kaggle] Civitai token sent to the notebook: {'yes' if civitai_token else 'NO'}")
 
         print(f"[Kaggle] Starting {kind} download: {filename or model_url[:80]}")
         r = requests.post(f'{base_url}/abiart/download', json=payload, headers=KAGGLE_HEADERS, timeout=30)
