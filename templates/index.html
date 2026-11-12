@@ -694,6 +694,12 @@
                                     </select>
                                 </div>
                             </div>
+                            <button type="button" class="btn btn-sm" onclick="applyKaggleQualityMax()" style="width:100%;margin:.2rem 0 .3rem"
+                                title="Hi-Res ×1,5 avec un upscaler anime + retouche automatique du visage et des mains">
+                                <i class="fas fa-star"></i> Qualité maximale</button>
+                            <p style="font-size:.65rem;color:var(--muted);margin:0 0 .4rem">
+                                <i class="fas fa-info-circle"></i> Active le Hi-Res ×1,5 et la retouche visage + mains (plus lent, tout reste modifiable). Avec un lot de 2, les deux images sont calculées en même temps, une par GPU.
+                            </p>
                             <!-- Le backend Hugging Face lit encore ce sélecteur de taille (comportement historique) : ne pas supprimer -->
                             <select id="imgSize" style="display:none">
                                 <option value="512x512">512×512</option>
@@ -1649,6 +1655,27 @@
             return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
+        // Préréglage "Qualité maximale" : Hi-Res avec un upscaler anime + retouche visage et mains.
+        // Il ne fait que régler les champs existants : l'utilisateur peut tout modifier ensuite.
+        function applyKaggleQualityMax() {
+            const check = (id) => { const el = document.getElementById(id); if (el && !el.disabled) { el.checked = true; el.dispatchEvent(new Event('change')); } };
+            check('kaggleHiresEnable');
+            const up = document.getElementById('kaggleHiresUpscaler');
+            if (up) {
+                const names = Array.from(up.options).map(o => o.value);
+                const best = ['4x-AnimeSharp', 'R-ESRGAN 4x+ Anime6B', '4x-UltraSharp'].find(n => names.includes(n));
+                if (best) { up.value = best; up.dispatchEvent(new Event('change')); }
+            }
+            uiSetSlider('kaggleHiresScale', 'kaggleHiresScaleVal', 1.5);
+            uiSetSlider('kaggleHiresDenoising', 'kaggleHiresDenoiseVal', 0.35);
+            uiSetSlider('kaggleHiresSteps', 'kaggleHiresStepsVal', 15);
+            check('kaggleAdetailer');
+            uiSetSelect('kaggleAdModel', 'face_yolov9c.pt');
+            check('kaggleAdetailer2');
+            uiSetSelect('kaggleAd2Model', 'hand_yolov9c.pt');
+            showToast('Qualité maximale : Hi-Res + retouche visage et mains activés', 'success');
+        }
+
         function setKaggleSize(w, h) {
             document.getElementById('kaggleWidth').value = w;
             document.getElementById('kaggleHeight').value = h;
@@ -2467,32 +2494,43 @@
                         adetailer2_strength: parseFloat(document.getElementById('kaggleAd2Strength').value),
                         adetailer2_steps: parseInt(document.getElementById('kaggleAd2Steps').value)
                     };
-                    const kMerged = { images: [], info: null, credits: null, warning: '' };
-                    for (let i = 0; i < kBatch; i++) {
+                    const kMerged = { images: [], info: null, credits: null, warning: '', timings: [] };
+                    // Deux images à la fois : une par GPU du notebook (avec un seul GPU, la seconde attend son tour
+                    // sur le notebook). Toutes les images du lot sont affichées, dans l'ordre des seeds.
+                    const K_PARALLEL = 2;
+                    let kFailed = '';
+                    for (let i = 0; i < kBatch && !kFailed; i += K_PARALLEL) {
+                        const kIdx = [];
+                        for (let j = i; j < Math.min(kBatch, i + K_PARALLEL); j++) kIdx.push(j);
                         if (kBatch > 1) {
-                            outputArea.innerHTML = `<div style="text-align:center"><div class="loading-spinner"></div><p style="color:var(--muted);font-family:Graduate,serif">Creating image ${i + 1} / ${kBatch}...</p></div>`;
+                            outputArea.innerHTML = `<div style="text-align:center"><div class="loading-spinner"></div><p style="color:var(--muted);font-family:Graduate,serif">Creating image ${kIdx.map(j => j + 1).join(' & ')} / ${kBatch}...</p></div>`;
                         }
-                        let part;
-                        try {
-                            const r = await fetch('/api/kaggle/generate', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(Object.assign({}, kBody, { seed: kSeedBase + i, batch_count: 1 }))
-                            });
-                            part = await r.json();
-                        } catch (netErr) { part = { error: netErr.message }; }
-                        if (part.error) {
-                            if (kMerged.images.length === 0) throw new Error(part.error);
-                            kMerged.warning = `Only ${kMerged.images.length}/${kBatch} image(s) generated: ${part.error}`;
-                            break;
+                        const kParts = await Promise.all(kIdx.map(async j => {
+                            try {
+                                const r = await fetch('/api/kaggle/generate', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(Object.assign({}, kBody, { seed: kSeedBase + j, batch_count: 1 }))
+                                });
+                                return await r.json();
+                            } catch (netErr) { return { error: netErr.message }; }
+                        }));
+                        for (const part of kParts) {
+                            if (part.error) { kFailed = kFailed || part.error; continue; }
+                            kMerged.images.push(...(part.images || [part.image]));
+                            if (!kMerged.info) kMerged.info = part.info;
+                            if (part.info && Array.isArray(part.info.timings)) kMerged.timings.push(...part.info.timings);
+                            if (part.credits && (!kMerged.credits || part.credits.images_remaining < kMerged.credits.images_remaining)) kMerged.credits = part.credits;
+                            if (part.warning) kMerged.warning = part.warning;
                         }
-                        kMerged.images.push(...(part.images || [part.image]));
-                        if (!kMerged.info) kMerged.info = part.info;
-                        if (part.credits) kMerged.credits = part.credits;
-                        if (part.warning) kMerged.warning = part.warning;
+                    }
+                    if (kFailed) {
+                        if (kMerged.images.length === 0) throw new Error(kFailed);
+                        kMerged.warning = `Only ${kMerged.images.length}/${kBatch} image(s) generated: ${kFailed}`;
                     }
                     kMerged.image = kMerged.images[0];
                     if (kMerged.info) kMerged.info.batch_count = kMerged.images.length;
+                    if (kMerged.info) kMerged.info.timings = kMerged.timings;
                     response = { json: async () => kMerged };
                 }
 
@@ -2623,6 +2661,13 @@
                         : (document.getElementById('modalHiresEnable') && document.getElementById('modalHiresEnable').checked);
                     if (hrChecked) parts.push(`<strong>Hi-Res:</strong> ✓`);
                     if (currentBackend === 'kaggle' && info.noise_scheduler) parts.push(`<strong>Scheduler:</strong> ${info.noise_scheduler}`);
+                    if (currentBackend === 'kaggle' && Array.isArray(info.timings) && info.timings.length) {
+                        // Temps par image : attente totale vue par le site, et calcul seul mesuré par le notebook
+                        const tTxt = info.timings.map(t => `${Math.round(t.time_s)} s` + (t.gen_s != null ? ` (calcul ${Math.round(t.gen_s)} s)` : '')).join(' + ');
+                        parts.push(`<strong>Temps:</strong> ${tTxt}`);
+                        const gpus = [...new Set(info.timings.map(t => t.gpu).filter(g => g != null))];
+                        if (gpus.length) parts.push(`<strong>GPU:</strong> ${gpus.join(', ')}`);
+                    }
                     parts.push(`<button class="btn btn-sm" onclick="recycleParams(0)" style="padding:.15rem .4rem;font-size:.6rem" title="Reuse these settings"><i class="fas fa-recycle"></i> Recycle</button>`);
                     bar.innerHTML = parts.join(' &nbsp;|&nbsp; ');
                     bar.style.display = 'block';

@@ -18,6 +18,7 @@ for i in range(len(sys.argv)):
 # Default Gunicorn configurations
 bind = f"0.0.0.0:{port}"
 workers = int(os.environ.get("WEB_CONCURRENCY", "2"))
+threads = int(os.environ.get("WEB_THREADS", "8"))  # generations keep their request open for minutes
 timeout = 300
 keepalive = 5
 accesslog = "-"
