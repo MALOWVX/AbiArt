@@ -680,7 +680,10 @@ def kaggle_txt2img(base_url, payload, headers=None, total_timeout=285, poll_ever
         st = s.json()
         state = st.get('state')
         if state == 'done':
-            return _KaggleJobResponse(200, {'images': st.get('images', []), 'info': st.get('info'), 'parameters': {}})
+            return _KaggleJobResponse(200, {'images': st.get('images', []), 'info': st.get('info'), 'parameters': {},
+                                            # mesures du notebook (absentes avec un ancien notebook)
+                                            'abiart': {'gpu': st.get('gpu'), 'seconds': st.get('seconds'),
+                                                       'load_seconds': st.get('load_seconds')}})
         if state in ('error', 'cancelled'):
             return _KaggleJobResponse(500, {'error': st.get('error') or 'Generation failed'})
 
@@ -879,6 +882,7 @@ def generate_kaggle():
         print(f"[Kaggle] Generating {batch_count} image(s) with payload: { {k: v for k, v in payload.items() if k != 'prompt'} }")
 
         images, seeds = [], []
+        timings = []   # per image: total wait seen by the site, compute time and GPU reported by the notebook
         last_error = ''
         for i in range(batch_count):
             elapsed = time.time() - started
@@ -888,6 +892,7 @@ def generate_kaggle():
                 print(f"[Kaggle] Stopping batch after {i} image(s) to stay under the request time limit")
                 break
             payload["seed"] = (seed + i) % 4294967295
+            image_started = time.time()
             try:
                 response = kaggle_txt2img(url, payload, headers=KAGGLE_HEADERS,
                                           total_timeout=max(20, KAGGLE_REQUEST_BUDGET - elapsed),
@@ -915,6 +920,13 @@ def generate_kaggle():
             except Exception:
                 pass
             seeds.append(real_seed)
+            measures = result.get('abiart') if isinstance(result.get('abiart'), dict) else {}
+            timings.append({
+                'time_s': round(time.time() - image_started, 1),   # queue + model load + compute + transfer
+                'gen_s': measures.get('seconds'),                  # compute only (None with an older notebook)
+                'load_s': measures.get('load_seconds'),
+                'gpu': measures.get('gpu'),
+            })
 
         deduct_credits(user['id'], len(images))
 
@@ -925,6 +937,7 @@ def generate_kaggle():
             'info': {
                 'seed': seeds[0],
                 'all_seeds': seeds,
+                'timings': timings,
                 'model': model,
                 'scheduler': sampler_name,
                 'noise_scheduler': noise_scheduler,
