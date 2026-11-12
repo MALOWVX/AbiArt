@@ -623,20 +623,31 @@ class _KaggleJobResponse:
         return self._data
 
 
-def kaggle_txt2img(base_url, payload, headers=None, total_timeout=285, poll_every=2.0):
+def kaggle_caps(base_url, headers=None):
+    """Capacités de l'extension AbiArt du notebook ({} si absente) :
+    'jobs' = génération asynchrone, 'routing' = le checkpoint voyage avec le job (notebook multi-GPU)."""
+    try:
+        ping = requests.get(f"{base_url.rstrip('/')}/abiart/ping", headers=headers or {}, timeout=10)
+        data = ping.json() if ping.status_code == 200 else {}
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def kaggle_txt2img(base_url, payload, headers=None, total_timeout=285, poll_every=2.0, caps=None, model=''):
     """Remplace requests.post(<kaggle>/sdapi/v1/txt2img, ...). Lève requests.exceptions.Timeout au-delà de
     total_timeout (285 s : Railway coupe une requête sans donnée au bout de 5 min)."""
     base_url = base_url.rstrip('/')
     headers = headers or {}
 
     # 1) l'extension asynchrone est-elle présente sur le notebook ?
-    try:
-        ping = requests.get(f'{base_url}/abiart/ping', headers=headers, timeout=10)
-        has_jobs = ping.status_code == 200 and bool((ping.json() or {}).get('jobs'))
-    except Exception:
-        has_jobs = False
-    if not has_jobs:      # ancien notebook : comportement historique (limité à ~100 s par le tunnel)
+    if caps is None:
+        caps = kaggle_caps(base_url, headers)
+    if not caps.get('jobs'):   # ancien notebook : comportement historique (limité à ~100 s par le tunnel)
         return requests.post(f'{base_url}/sdapi/v1/txt2img', json=payload, headers=headers, timeout=total_timeout)
+    if model and caps.get('routing'):
+        # Notebook multi-GPU : il charge ce checkpoint sur le GPU qui calcule le job (si ce n'est pas déjà fait)
+        payload = dict(payload, abiart_model=model)
 
     # 2) démarrer le job
     r = requests.post(f'{base_url}/abiart/generate', json=payload, headers=headers, timeout=30)
@@ -806,8 +817,12 @@ def generate_kaggle():
         for lora in loras:
             full_prompt = f"<lora:{lora['name']}:{lora['weight']}> " + full_prompt
 
-        # Switch checkpoint only when it differs from the loaded one (a switch costs several seconds)
-        if model:
+        # Multi-GPU notebook ('routing'): the checkpoint is sent with each job and loaded on the GPU that
+        # runs it, so two users with two different checkpoints no longer reload the model at every image.
+        caps = kaggle_caps(url, KAGGLE_HEADERS)
+
+        # Older notebook: switch checkpoint here, only when it differs from the loaded one
+        if model and not caps.get('routing'):
             try:
                 current = requests.get(f"{url}/sdapi/v1/options", timeout=15, headers=KAGGLE_HEADERS).json().get('sd_model_checkpoint', '')
             except Exception:
@@ -875,7 +890,8 @@ def generate_kaggle():
             payload["seed"] = (seed + i) % 4294967295
             try:
                 response = kaggle_txt2img(url, payload, headers=KAGGLE_HEADERS,
-                                          total_timeout=max(20, KAGGLE_REQUEST_BUDGET - elapsed))
+                                          total_timeout=max(20, KAGGLE_REQUEST_BUDGET - elapsed),
+                                          caps=caps, model=model)
             except requests.exceptions.Timeout:
                 last_error = 'generation timed out'
                 if images:
