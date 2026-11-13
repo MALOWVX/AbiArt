@@ -1061,10 +1061,11 @@ def get_kaggle_options():
         return jsonify({'error': 'Kaggle backend not configured.'}), 400
 
     if data.get('refresh_loras'):
-        try:
-            requests.post(f'{base_url}/sdapi/v1/refresh-loras', headers=KAGGLE_HEADERS, timeout=60)
-        except requests.exceptions.RequestException as e:
-            print(f"[Kaggle] refresh-loras failed: {e}")
+        for refresh in ('refresh-loras', 'refresh-embeddings'):
+            try:
+                requests.post(f'{base_url}/sdapi/v1/{refresh}', headers=KAGGLE_HEADERS, timeout=60)
+            except requests.exceptions.RequestException as e:
+                print(f"[Kaggle] {refresh} failed: {e}")
 
     def fetch(path):
         try:
@@ -1081,6 +1082,13 @@ def get_kaggle_options():
     latent_modes = fetch('/sdapi/v1/latent-upscale-modes')
     loras = fetch('/sdapi/v1/loras')
     scripts = fetch('/sdapi/v1/scripts')
+    # {"loaded": {name: ...}, "skipped": {name: ...}} : "skipped" = not compatible with the checkpoint in memory
+    emb = fetch('/sdapi/v1/embeddings')
+    embeddings = []
+    if isinstance(emb, dict):
+        for group in ('loaded', 'skipped'):
+            if isinstance(emb.get(group), dict):
+                embeddings += [n for n in emb[group] if n not in embeddings]
     if samplers is None and loras is None:
         return jsonify({'error': 'Could not reach the Kaggle backend'}), 502
 
@@ -1098,6 +1106,7 @@ def get_kaggle_options():
         'schedulers': names(schedulers, 'label', 'name'),
         'upscalers': names(latent_modes, 'name') + [u for u in names(upscalers, 'name') if u not in names(latent_modes, 'name')],
         'loras': names(loras, 'name'),
+        'embeddings': sorted(embeddings, key=str.lower),
         # True / False when A1111 told us, None when unknown (the UI only blocks on an explicit False)
         'adetailer': ('adetailer' in [str(x).lower() for x in (scripts.get('txt2img') or [])]) if isinstance(scripts, dict) else None,
     })
@@ -1143,7 +1152,7 @@ def download_to_kaggle():
         model_url = (data.get('model_url', '') or '').strip()
         filename = (data.get('filename', '') or '').strip()
         kind = (data.get('type', 'checkpoint') or 'checkpoint').lower()
-        if kind not in ('checkpoint', 'lora', 'vae'):
+        if kind not in ('checkpoint', 'lora', 'vae', 'embedding'):
             kind = 'checkpoint'
         if not base_url:
             return jsonify({'error': 'Kaggle backend not configured. Start the Kaggle notebook first.'}), 400
@@ -1212,7 +1221,8 @@ def kaggle_download_status():
         return jsonify({'state': 'unreachable'})
     if result.get('state') == 'done':
         # A1111 only sees a new file after it re-scans its folders
-        refresh = {'checkpoint': 'refresh-checkpoints', 'lora': 'refresh-loras', 'vae': 'refresh-vae'}.get(result.get('kind'))
+        refresh = {'checkpoint': 'refresh-checkpoints', 'lora': 'refresh-loras', 'vae': 'refresh-vae',
+                   'embedding': 'refresh-embeddings'}.get(result.get('kind'))
         if refresh:
             try:
                 requests.post(f'{base_url}/sdapi/v1/{refresh}', headers=KAGGLE_HEADERS, timeout=30)

@@ -7,11 +7,12 @@
     <title>AbiArt — AI Image Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Graduate&family=Courier+Prime:wght@400;700&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;600&display=swap"
         rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="/static/style.css" rel="stylesheet">
     <link href="/static/modern-ui.css" rel="stylesheet">
+    <link href="/static/studio.css" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png">
 </head>
 
@@ -882,6 +883,29 @@
                             </div>
                         </div>
                     </details>
+
+                    <!-- Embeddings (textual inversion) -->
+                    <details class="sb-section">
+                        <summary><i class="fas fa-tag"></i> Embeddings</summary>
+                        <div class="sb-body">
+                            <label class="field-label" style="margin-bottom:.2rem">Available on Kaggle</label>
+                            <div class="row">
+                                <select id="kaggleEmbeddingSelect" style="flex:1">
+                                    <option value="">No embedding found</option>
+                                </select>
+                                <button class="btn btn-sm" onclick="loadKaggleOptions(true)" title="Rescan embeddings"><i
+                                        class="fas fa-rotate"></i></button>
+                            </div>
+                            <div class="row" style="margin-top:.3rem">
+                                <button class="btn btn-sm" style="flex:1" onclick="insertKaggleEmbedding('promptInput')"><i
+                                        class="fas fa-plus"></i> Prompt</button>
+                                <button class="btn btn-sm" style="flex:1" onclick="insertKaggleEmbedding('negativePrompt')"><i
+                                        class="fas fa-plus"></i> Negative</button>
+                            </div>
+                            <p style="color:var(--muted);font-size:.65rem;margin-top:.3rem">An embedding is used by writing its name
+                                in the prompt (most are made for the negative prompt). Add one with "Add Model (Civitai)".</p>
+                        </div>
+                    </details>
                 </div>
 
                 <!-- MODAL SETTINGS -->
@@ -1254,6 +1278,10 @@
                                 <input type="checkbox" id="civitaiIsLora">
                                 <span style="color:var(--muted)">This is a LoRA</span>
                             </label>
+                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.7rem">
+                                <input type="checkbox" id="civitaiIsEmbedding">
+                                <span style="color:var(--muted)">This is an embedding (Kaggle only, detected automatically for Civitai links)</span>
+                            </label>
                             <button class="btn-accent" onclick="downloadFromCivitaiUrl()" style="padding:.5rem">
                                 <i class="fas fa-cloud-download-alt"></i> Download Model
                             </button>
@@ -1278,6 +1306,8 @@
                                         onclick="switchModelTab('checkpoints')">Checkpoints</button>
                                     <button class="btn btn-sm" style="flex:1" data-tab="loras"
                                         onclick="switchModelTab('loras')">LoRAs</button>
+                                    <button class="btn btn-sm" style="flex:1" data-tab="embeddings"
+                                        onclick="switchModelTab('embeddings')">Embeddings</button>
                                 </div>
                                 <div class="row" style="margin-bottom:.4rem;gap:.3rem">
                                     <select id="civitaiBaseModel" onchange="searchCivitai()"
@@ -1742,10 +1772,29 @@
                 } else {
                     loraSel.innerHTML = '<option value="">No LoRA found</option>';
                 }
-                if (refreshLoras === true) showToast(`${(data.loras || []).length} LoRA(s) found`, 'success');
+                const embSel = document.getElementById('kaggleEmbeddingSelect');
+                if (embSel) {
+                    embSel.innerHTML = (data.embeddings && data.embeddings.length > 0)
+                        ? data.embeddings.map(n => `<option value="${_escAttr(n)}">${_escAttr(n)}</option>`).join('')
+                        : '<option value="">No embedding found</option>';
+                }
+                if (refreshLoras === true) showToast(`${(data.loras || []).length} LoRA(s), ${(data.embeddings || []).length} embedding(s) found`, 'success');
             } catch (e) {
                 console.warn('[Kaggle] Could not load options:', e);
             }
+        }
+
+        // ----- Kaggle embeddings: the name is simply written in the prompt (A1111 convention) -----
+        function insertKaggleEmbedding(targetId) {
+            const name = document.getElementById('kaggleEmbeddingSelect').value;
+            if (!name) { showToast('No embedding selected'); return; }
+            const box = document.getElementById(targetId);
+            const current = box.value.trim();
+            const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (new RegExp('(^|[\\s,(])' + esc + '($|[\\s,):])', 'i').test(current)) { showToast('Embedding already in this prompt'); return; }
+            box.value = current === '' ? name : (current.endsWith(',') ? current + ' ' + name : current + ', ' + name);
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            showToast(`${name} added`, 'success');
         }
 
         // ----- Kaggle LoRAs (activeLoRAs) -----
@@ -1797,7 +1846,7 @@
         // ========== CIVITAI ==========
         async function searchCivitai() {
             const query = document.getElementById('civitaiSearch').value.trim();
-            const type = currentModelTab === 'checkpoints' ? 'Checkpoint' : 'LORA';
+            const type = { checkpoints: 'Checkpoint', loras: 'LORA', embeddings: 'TextualInversion' }[currentModelTab] || 'Checkpoint';
             const baseModelEl = document.getElementById('civitaiBaseModel');
             const baseModel = baseModelEl ? baseModelEl.value : 'All';
             const sortEl = document.getElementById('civitaiSort');
@@ -2152,7 +2201,10 @@
             const target = currentBackend === 'modal' ? 'Modal' : 'Kaggle';
             document.getElementById('downloadModalContent').innerHTML = `<p style="color:var(--muted);font-size:.8rem">Download <strong style="color:var(--text)">${model.name}</strong> to ${target}?<br><small>Type: ${model.type} | Version: ${model.version || 'Latest'}</small></p>`;
             document.getElementById('downloadModal').style.display = 'flex';
-            document.getElementById('confirmDownloadBtn').onclick = () => { currentBackend === 'modal' ? downloadToModal(model) : downloadCivitaiModel(model); };
+            document.getElementById('confirmDownloadBtn').onclick = () => {
+                if (currentBackend === 'modal' && civitaiKind(model.type) === 'embedding') { closeDownloadModal(); showToast('Embeddings are only available on the Kaggle backend'); return; }
+                currentBackend === 'modal' ? downloadToModal(model) : downloadCivitaiModel(model);
+            };
         }
 
         // Download a model on the Kaggle machine and wait for it (progress is polled every 2 s)
@@ -2206,21 +2258,31 @@
                     } catch (e) { console.error('Error saving trigger words', e); }
                 }
                 loadKaggleOptions(true);
+            } else if (result.kind === 'embedding') {
+                loadKaggleOptions(true);
             } else {
                 loadKaggleModels();
             }
         }
 
+        // Civitai model type -> download type understood by the Kaggle notebook
+        function civitaiKind(type) {
+            const t = String(type || '').toLowerCase();
+            if (t === 'textualinversion') return 'embedding';
+            return t === 'lora' ? 'lora' : 'checkpoint';
+        }
+        const KIND_LABEL = { lora: 'LoRA', embedding: 'Embedding', checkpoint: 'Checkpoint' };
+
         async function downloadCivitaiModel(model) {
             closeDownloadModal(); showToast('Downloading model to Kaggle...', 'success'); updateStatus('Downloading...', 'warning');
             try {
-                const type = model.type.toLowerCase() === 'lora' ? 'lora' : 'checkpoint';
+                const type = civitaiKind(model.type);
                 const result = await kaggleDownloadAndWait({ model_url: model.download_url, filename: model.filename, type }, msg => {
                     const el = document.getElementById('downloadStatus'), tx = document.getElementById('downloadStatusText');
                     if (el && tx) { el.style.display = 'block'; tx.textContent = msg; }
                 });
                 afterKaggleDownload(result, model.trained_words);
-                showToast(`${type === 'lora' ? 'LoRA' : 'Checkpoint'} downloaded to Kaggle!`, 'success');
+                showToast(`${KIND_LABEL[type]} downloaded to Kaggle!`, 'success');
                 const el = document.getElementById('downloadStatus');
                 if (el) setTimeout(() => { el.style.display = 'none'; }, 3000);
             } catch (e) { updateStatus('Download failed', 'error'); showToast('Download failed: ' + e.message); }
@@ -2236,7 +2298,8 @@
             const url = document.getElementById('civitaiUrl').value.trim();
             let filename = document.getElementById('civitaiFilename').value.trim();
             const token = document.getElementById('civitaiToken').value.trim();
-            const isLora = document.getElementById('civitaiIsLora').checked;
+            let isEmbedding = document.getElementById('civitaiIsEmbedding').checked;
+            const isLora = !isEmbedding && document.getElementById('civitaiIsLora').checked;
             if (!url) { showToast('Please enter a Civitai URL'); return; }
             const statusDiv = document.getElementById('downloadStatus');
             const statusText = document.getElementById('downloadStatusText');
@@ -2256,6 +2319,7 @@
                     const infoResp = await fetch(`${civitaiBase}/api/v1/models/${modelId}`);
                     if (!infoResp.ok) throw new Error('Could not find model on Civitai');
                     modelInfo = await infoResp.json();
+                    if (modelInfo.type === 'TextualInversion') isEmbedding = true;
                     const versions = modelInfo.modelVersions || [];
                     if (versions.length === 0) throw new Error('No versions found');
                     if (!modelVersionId) {
@@ -2264,13 +2328,15 @@
                     if (!filename) { const files = versions[0].files || []; if (files.length > 0) filename = files[0].name || `model_${modelVersionId}.safetensors`; }
                 }
                 if (!modelVersionId) throw new Error('Could not extract model/version ID');
+                if (isEmbedding && currentBackend !== 'kaggle') throw new Error('Embeddings are only available on the Kaggle backend');
+                const kind = isEmbedding ? 'embedding' : (isLora ? 'lora' : 'checkpoint');
                 if (!filename) filename = isLora ? `lora_${modelVersionId}.safetensors` : `model_${modelVersionId}.safetensors`;
                 let downloadUrl = `${civitaiBase}/api/download/models/${modelVersionId}`;
                 if (token) downloadUrl += `?token=${token}`;
-                statusText.textContent = `Downloading ${isLora ? 'LoRA' : 'checkpoint'}: ${filename}...`;
+                statusText.textContent = `Downloading ${KIND_LABEL[kind]}: ${filename}...`;
                 let data;
                 if (currentBackend === 'kaggle') {
-                    const kr = await kaggleDownloadAndWait({ model_url: downloadUrl, filename, type: isLora ? 'lora' : 'checkpoint' }, msg => { statusText.textContent = msg; });
+                    const kr = await kaggleDownloadAndWait({ model_url: downloadUrl, filename, type: kind }, msg => { statusText.textContent = msg; });
                     const tw = (modelInfo && (modelInfo.modelVersions || []).find(v => v.id == modelVersionId))?.trainedWords || (modelInfo?.modelVersions?.[0]?.trainedWords) || [];
                     afterKaggleDownload(kr, tw);
                     data = { success: true };
@@ -2293,11 +2359,12 @@
                     }
 
                     statusText.textContent = `✓ Downloaded ${filename}`;
-                    showToast(`${isLora ? 'LoRA' : 'Model'} downloaded!`, 'success');
+                    showToast(`${isEmbedding ? 'Embedding' : (isLora ? 'LoRA' : 'Model')} downloaded!`, 'success');
                     if (currentBackend !== 'kaggle') refreshModalModels();
                     document.getElementById('civitaiUrl').value = '';
                     document.getElementById('civitaiFilename').value = '';
                     document.getElementById('civitaiIsLora').checked = false;
+                    document.getElementById('civitaiIsEmbedding').checked = false;
                     setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
                 } else throw new Error(data.error);
             } catch (e) { statusText.textContent = `✗ Failed: ${e.message}`; showToast('Download failed: ' + e.message); }
