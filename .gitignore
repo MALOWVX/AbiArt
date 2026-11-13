@@ -33,3 +33,6 @@ desktop.ini
 *.log
 *.pdf
 *.db
+
+# Banc d essai : images et resultats locaux
+research/runs/
