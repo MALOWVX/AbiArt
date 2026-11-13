@@ -1,0 +1,90 @@
+{
+  "note": "Réglages de génération du banc d'essai. À mettre sur VOS réglages habituels avant la première mesure, puis ne plus y toucher : une mesure n'est comparable qu'à réglages identiques.",
+  "model": "",
+  "quality": "masterpiece, best quality, very aesthetic, absurdres",
+  "negative": "nsfw, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, jpeg artifacts, signature, watermark, username, blurry",
+  "sampler": "Euler a",
+  "scheduler": "Automatic",
+  "steps": 25,
+  "cfg": 5,
+  "width": 832,
+  "height": 1216,
+  "clip_skip": 1,
+  "seeds": [
+    1001,
+    2002
+  ],
+  "variants": {
+    "baseline": {
+      "desc": "Une passe simple, sans retouche. Tous les prompts, les deux seeds.",
+      "cats": [
+        "hands",
+        "count"
+      ],
+      "seeds": "all"
+    },
+    "repair": {
+      "desc": "Même image (même seed) + retouche visage et mains, comme « Qualité maximale » sans le Hi-Res.",
+      "cats": [
+        "hands"
+      ],
+      "seeds": "first",
+      "detailers": [
+        {
+          "ad_model": "face_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.4
+        },
+        {
+          "ad_model": "hand_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.4
+        }
+      ]
+    },
+    "repair55": {
+      "desc": "Comme « repair », mais retouche des mains à 0,55 au lieu de 0,4. Le visage reste à 0,4.",
+      "cats": [
+        "hands"
+      ],
+      "seeds": "first",
+      "detailers": [
+        {
+          "ad_model": "face_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.4
+        },
+        {
+          "ad_model": "hand_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.55
+        }
+      ]
+    },
+    "repair70": {
+      "desc": "Comme « repair », mais retouche des mains à 0,7 au lieu de 0,4. Le visage reste à 0,4.",
+      "cats": [
+        "hands"
+      ],
+      "seeds": "first",
+      "detailers": [
+        {
+          "ad_model": "face_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.4
+        },
+        {
+          "ad_model": "hand_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.7
+        }
+      ]
+    }
+  },
+  "detectors": [
+    "hand_yolov8n.pt",
+    "hand_yolov8s.pt",
+    "face_yolov8m.pt",
+    "person_yolov8m-seg.pt"
+  ]
+}

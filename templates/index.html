@@ -695,6 +695,14 @@
                                     </select>
                                 </div>
                             </div>
+                            <label id="kaggleRetouchRow" title="Retouche automatique du visage et des mains après la génération"
+                                style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.75rem;font-weight:600;padding:.5rem .6rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg)">
+                                <input type="checkbox" id="kaggleRetouchMode" onchange="setKaggleRetouchMode(this.checked)">
+                                <span><i class="fas fa-wand-magic-sparkles" style="color:var(--accent2);margin-right:.25rem"></i> Activation du mode retouche</span>
+                            </label>
+                            <p style="font-size:.65rem;color:var(--muted);margin:0 0 .3rem">
+                                <i class="fas fa-info-circle"></i> Corrige le visage et les mains après la génération. Désactivé par défaut : l'image prend environ deux fois plus de temps.
+                            </p>
                             <button type="button" class="btn btn-sm" onclick="applyKaggleQualityMax()" style="width:100%;margin:.2rem 0 .3rem"
                                 title="Hi-Res ×1,5 avec un upscaler anime + retouche automatique du visage et des mains">
                                 <i class="fas fa-star"></i> Qualité maximale</button>
@@ -1687,6 +1695,40 @@
 
         // Préréglage "Qualité maximale" : Hi-Res avec un upscaler anime + retouche visage et mains.
         // Il ne fait que régler les champs existants : l'utilisateur peut tout modifier ensuite.
+        // ----- Mode retouche : un seul interrupteur pour la retouche visage + mains -----
+        // Réglages issus du banc d'essai (dossier research/) : à ne changer qu'après une mesure.
+        const KAGGLE_RETOUCH = { faceModel: 'face_yolov9c.pt', handModel: 'hand_yolov9c.pt', faceStrength: 0.4, handStrength: 0.4 };
+
+        function setKaggleRetouchMode(on) {
+            const face = document.getElementById('kaggleAdetailer'), hand = document.getElementById('kaggleAdetailer2');
+            if (on && (face.disabled || hand.disabled)) {
+                showToast("La retouche n'est pas installée sur ce notebook Kaggle");
+                syncKaggleRetouchMode();
+                return;
+            }
+            [face, hand].forEach(cb => { if (!cb.disabled) { cb.checked = on; cb.dispatchEvent(new Event('change')); } });
+            if (on) {
+                uiSetSelect('kaggleAdModel', KAGGLE_RETOUCH.faceModel);
+                uiSetSelect('kaggleAd2Model', KAGGLE_RETOUCH.handModel);
+                uiSetSlider('kaggleAdStrength', 'kaggleAdStrengthVal', KAGGLE_RETOUCH.faceStrength);
+                uiSetSlider('kaggleAd2Strength', 'kaggleAd2StrengthVal', KAGGLE_RETOUCH.handStrength);
+            }
+            syncKaggleRetouchMode();
+            autoSaveSettings();
+            showToast(on ? 'Mode retouche activé : visage et mains corrigés après la génération' : 'Mode retouche désactivé', 'success');
+        }
+
+        // L'interrupteur reflète toujours l'état réel des deux retouches (elles restent réglables à la main)
+        function syncKaggleRetouchMode() {
+            const toggle = document.getElementById('kaggleRetouchMode');
+            const face = document.getElementById('kaggleAdetailer'), hand = document.getElementById('kaggleAdetailer2');
+            if (toggle && face && hand) toggle.checked = face.checked && hand.checked;
+        }
+        ['kaggleAdetailer', 'kaggleAdetailer2'].forEach(id => {
+            const cb = document.getElementById(id);
+            if (cb) cb.addEventListener('change', syncKaggleRetouchMode);
+        });
+
         function applyKaggleQualityMax() {
             const check = (id) => { const el = document.getElementById(id); if (el && !el.disabled) { el.checked = true; el.dispatchEvent(new Event('change')); } };
             check('kaggleHiresEnable');
@@ -1766,6 +1808,7 @@
                     if (!adOk) cb.checked = false;
                 });
                 document.querySelectorAll('.kaggle-ad-note').forEach(n => { n.style.display = adOk ? 'none' : 'block'; });
+                syncKaggleRetouchMode();
                 const loraSel = document.getElementById('kaggleLoraSelect');
                 if (data.loras && data.loras.length > 0) {
                     loraSel.innerHTML = data.loras.map(n => `<option value="${_escAttr(n)}">${_escAttr(n)}</option>`).join('');
@@ -2998,6 +3041,7 @@
                 }
                 if (info.adetailer2 !== undefined) {
                     const cb2 = document.getElementById('kaggleAdetailer2'); if (!cb2.disabled) cb2.checked = !!info.adetailer2;
+                    syncKaggleRetouchMode();
                     if (info.adetailer2_model) uiSetSelect('kaggleAd2Model', info.adetailer2_model);
                     if (info.adetailer2_confidence !== undefined) uiSetSlider('kaggleAd2Confidence', 'kaggleAd2ConfidenceVal', info.adetailer2_confidence);
                     if (info.adetailer2_prompt !== undefined) document.getElementById('kaggleAd2Prompt').value = info.adetailer2_prompt;
@@ -3156,6 +3200,7 @@
                 activeLoRAs = settings._kaggleLoras;
                 updateLorasDisplay();
             }
+            syncKaggleRetouchMode();
         }
 
         // Auto-save on any change
