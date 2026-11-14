@@ -2187,11 +2187,11 @@
         }
 
         // Download a model on the Kaggle machine and wait for it (progress is polled every 2 s)
-        async function kaggleDownloadAndWait({ model_url, filename, type }, onProgress) {
+        async function kaggleDownloadAndWait({ model_url, filename, type, token }, onProgress) {
             const activeUrl = kaggleUrl || (document.getElementById('kaggleUrl') ? document.getElementById('kaggleUrl').value.trim() : '');
             const startResp = await fetch('/api/kaggle/download', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: activeUrl, model_url, filename, type })
+                body: JSON.stringify({ url: activeUrl, model_url, filename, type, token: token || '' })
             });
             const started = await startResp.json();
             if (!started.success) throw new Error(started.error || 'Download could not start');

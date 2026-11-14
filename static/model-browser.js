@@ -641,7 +641,10 @@
                 setProgress('');
             } else {
                 updateStatus('Downloading...', 'warning');
-                const result = await kaggleDownloadAndWait({ model_url: v.download_url, filename: v.filename, type: kind }, setProgress);
+                // Jeton Civitai du champ « Avancé », s'il est rempli ; sinon le serveur utilise le sien
+                const tokenField = document.getElementById('civitaiToken');
+                const token = tokenField ? tokenField.value.trim() : '';
+                const result = await kaggleDownloadAndWait({ model_url: v.download_url, filename: v.filename, type: kind, token }, setProgress);
                 rememberBase(result.filename || v.filename, v.base_model);
                 afterKaggleDownload(result, model.trained_words);
                 showToast(`${d.name} est installé sur Kaggle`, 'success');
