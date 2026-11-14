@@ -2840,13 +2840,63 @@
             });
         }
 
+        // ----- Images d'origine : gardées dans IndexedDB (localStorage est limité à ~5 Mo) -----
+        // localStorage ne contient que la vignette, une copie réduite de secours et les réglages.
+        const HISTORY_DB = 'abiart_history';
+        const HISTORY_STORE = 'images';
+        let historyDbPromise = null;
+        let historyIdCounter = 0;
+
+        function openHistoryDb() {
+            if (!historyDbPromise) {
+                historyDbPromise = new Promise((resolve, reject) => {
+                    if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+                    const req = indexedDB.open(HISTORY_DB, 1);
+                    req.onupgradeneeded = () => req.result.createObjectStore(HISTORY_STORE);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+            return historyDbPromise;
+        }
+
+        // Toutes les opérations échouent en silence : sans IndexedDB, l'historique retombe sur la copie réduite.
+        async function historyStore(mode, action) {
+            try {
+                const db = await openHistoryDb();
+                return await new Promise((resolve, reject) => {
+                    const tx = db.transaction(HISTORY_STORE, mode);
+                    const req = action(tx.objectStore(HISTORY_STORE));
+                    tx.oncomplete = () => resolve(req ? req.result : undefined);
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.warn('History image store unavailable:', e);
+                return undefined;
+            }
+        }
+
+        // Supprime d'IndexedDB les images qui ne sont plus dans l'historique (expirées, évincées, effacées).
+        async function pruneHistoryStore() {
+            const keys = await historyStore('readonly', s => s.getAllKeys());
+            if (!keys) return;
+            const keep = new Set(imageHistoryData.map(item => item.id).filter(Boolean));
+            const stale = keys.filter(k => !keep.has(k));
+            if (stale.length) await historyStore('readwrite', s => { stale.forEach(k => s.delete(k)); });
+        }
+
         async function addToHistory(imageBase64, info) {
             const thumb = await createThumbnail(imageBase64);         // tiny 100px for strip
-            const medium = await createThumbnail(imageBase64, 900);   // 900px JPEG for saved view
-            imageHistoryData.unshift({ image: imageBase64, medium, thumb, info, timestamp: Date.now() });
+            const medium = await createThumbnail(imageBase64, 900);   // 900px JPEG : secours si IndexedDB est indisponible
+            const timestamp = Date.now();
+            const id = `${timestamp}-${historyIdCounter++}`;
+            imageHistoryData.unshift({ id, image: imageBase64, medium, thumb, info, timestamp, full: true });
             if (imageHistoryData.length > MAX_HISTORY) imageHistoryData.pop();
             renderHistoryStrip();
             saveHistoryToStorage();
+            await historyStore('readwrite', s => { s.put(imageBase64, id); });
+            pruneHistoryStore();
         }
 
         function renderHistoryStrip() {
@@ -2867,6 +2917,7 @@
             try {
                 // Save medium-quality JPEG (not raw PNG) to stay within localStorage limits
                 const compact = imageHistoryData.map(item => ({
+                    id: item.id,                        // clé de l'image d'origine dans IndexedDB
                     image: item.medium || item.thumb,   // 900px JPEG compressed, never raw PNG
                     thumb: item.thumb,
                     info: item.info,
@@ -2889,6 +2940,8 @@
                 imageHistoryData = saved
                     .filter(item => !item.timestamp || item.timestamp > fifteenDaysAgo)
                     .map(item => ({
+                        id: item.id,                       // absent des entrées antérieures à IndexedDB
+                        full: false,                       // l'image d'origine est chargée à l'ouverture
                         image: item.image || item.thumb,   // medium-quality JPEG (or thumb for old entries)
                         medium: item.image || item.thumb,  // same reference
                         thumb: item.thumb || item.image,
@@ -2896,6 +2949,7 @@
                         timestamp: item.timestamp || Date.now()
                     }));
                 renderHistoryStrip();
+                pruneHistoryStore();
             } catch (e) { console.warn('Could not load history:', e); }
         }
 
@@ -2903,13 +2957,25 @@
             if (!confirm('Clear all image history?')) return;
             imageHistoryData = [];
             localStorage.removeItem(HISTORY_KEY);
+            historyStore('readwrite', s => { s.clear(); });
             document.getElementById('imageHistoryCard').style.display = 'none';
             showToast('History cleared', 'success');
         }
 
-        function viewHistoryItem(index) {
+        let historyViewToken = 0;
+
+        async function viewHistoryItem(index) {
             const item = imageHistoryData[index];
             if (!item) return;
+            // Après un rechargement, seule la copie réduite est en mémoire : on reprend l'image d'origine.
+            if (!item.full && item.id) {
+                const token = ++historyViewToken;
+                const original = await historyStore('readonly', s => s.get(item.id));
+                if (original) { item.image = original; item.full = true; }
+                if (token !== historyViewToken) return;   // un autre élément a été ouvert entre-temps
+            } else {
+                historyViewToken++;
+            }
             currentImage = item.image;
             // Use full image if available (long base64), else thumb
             const hasFullImg = item.image && item.image.length > 500;
