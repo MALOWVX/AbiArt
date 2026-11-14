@@ -13,6 +13,7 @@
     <link href="/static/style.css" rel="stylesheet">
     <link href="/static/modern-ui.css" rel="stylesheet">
     <link href="/static/studio.css" rel="stylesheet">
+    <link href="/static/model-browser.css?v=1" rel="stylesheet">
     <link rel="icon" type="image/png" href="/static/favicon.png">
 </head>
 
@@ -1270,9 +1271,22 @@
 
                 <!-- CIVITAI BROWSER (Kaggle + Modal) -->
                 <div id="civitaiBrowser" style="display:none">
-                    <details class="sb-section">
+                    <details class="sb-section" open>
                         <summary><i class="fas fa-download"></i> Add Model (Civitai)</summary>
                         <div class="sb-body">
+                            <button class="btn-accent" onclick="openModelBrowser()" style="padding:.55rem">
+                                <i class="fas fa-compass"></i> Parcourir les modèles
+                            </button>
+                            <p style="color:var(--muted);font-size:.65rem;margin-top:.3rem">Checkpoints, LoRA et embeddings de Civitai :
+                                images d'exemple, réglages conseillés et téléchargement en un clic.</p>
+                            <div id="downloadStatus" style="display:none;margin-top:.3rem">
+                                <p style="font-size:.7rem;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i>
+                                    <span id="downloadStatusText">Downloading...</span>
+                                </p>
+                            </div>
+                            <details id="civitaiAdvanced" style="margin-top:.5rem">
+                                <summary style="font-size:.7rem;color:var(--muted);cursor:pointer">Avancé : télécharger depuis un lien</summary>
+                                <div style="display:flex;flex-direction:column;gap:.4rem;margin-top:.5rem">
                             <div class="field">
                                 <input type="text" id="civitaiUrl" placeholder="https://civitai.com ou civitai.red/models/...">
                             </div>
@@ -1295,50 +1309,8 @@
                             </button>
                             <a href="https://civitai.red/user/account" target="_blank"
                                 style="font-size:.6rem;color:var(--accent2)">Get Civitai API token →</a>
-                            <div id="downloadStatus" style="display:none;margin-top:.3rem">
-                                <p style="font-size:.7rem;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i>
-                                    <span id="downloadStatusText">Downloading...</span>
-                                </p>
-                            </div>
-
-                            <!-- Search -->
-                            <div style="margin-top:.5rem;border-top:1px solid var(--muted);padding-top:.5rem">
-                                <div class="row" style="margin-bottom:.4rem">
-                                    <input type="text" id="civitaiSearch" placeholder="Search Civitai..."
-                                        style="flex:1">
-                                    <button class="btn btn-sm" onclick="searchCivitai()"><i
-                                            class="fas fa-search"></i></button>
                                 </div>
-                                <div class="row" style="margin-bottom:.4rem">
-                                    <button class="btn btn-sm" style="flex:1" data-tab="checkpoints"
-                                        onclick="switchModelTab('checkpoints')">Checkpoints</button>
-                                    <button class="btn btn-sm" style="flex:1" data-tab="loras"
-                                        onclick="switchModelTab('loras')">LoRAs</button>
-                                    <button class="btn btn-sm" style="flex:1" data-tab="embeddings"
-                                        onclick="switchModelTab('embeddings')">Embeddings</button>
-                                </div>
-                                <div class="row" style="margin-bottom:.4rem;gap:.3rem">
-                                    <select id="civitaiBaseModel" onchange="searchCivitai()"
-                                        style="flex:1;font-size:.68rem;padding:.2rem .4rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px">
-                                        <option value="All">All Architectures</option>
-                                        <option value="Flux.1 D">⚡ Flux.1 D</option>
-                                        <option value="SDXL 1.0">SDXL 1.0</option>
-                                        <option value="Illustrious">🎨 Illustrious</option>
-                                        <option value="Pony">🦄 Pony</option>
-                                        <option value="SD 1.5">SD 1.5</option>
-                                    </select>
-                                    <select id="civitaiSort" onchange="searchCivitai()"
-                                        style="font-size:.68rem;padding:.2rem .4rem;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px">
-                                        <option value="Highest Rated">Top Rated</option>
-                                        <option value="Most Downloaded">Popular</option>
-                                        <option value="Newest">Newest</option>
-                                    </select>
-                                </div>
-                                <div class="model-grid" id="modelGrid">
-                                    <p style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.7rem">
-                                        Search for models above</p>
-                                </div>
-                            </div>
+                            </details>
                         </div>
                     </details>
                 </div>
@@ -1624,10 +1596,6 @@
                 });
             });
 
-            // Civitai search enter
-            document.getElementById('civitaiSearch').addEventListener('keypress', e => {
-                if (e.key === 'Enter') searchCivitai();
-            });
 
             // ControlNet drop-zone init
             initControlNetDropZone();
@@ -1887,39 +1855,7 @@
         }
 
         // ========== CIVITAI ==========
-        async function searchCivitai() {
-            const query = document.getElementById('civitaiSearch').value.trim();
-            const type = { checkpoints: 'Checkpoint', loras: 'LORA', embeddings: 'TextualInversion' }[currentModelTab] || 'Checkpoint';
-            const baseModelEl = document.getElementById('civitaiBaseModel');
-            const baseModel = baseModelEl ? baseModelEl.value : 'All';
-            const sortEl = document.getElementById('civitaiSort');
-            const sort = sortEl ? sortEl.value : 'Highest Rated';
-            const grid = document.getElementById('modelGrid');
-            grid.innerHTML = '<p style="grid-column:1/-1;text-align:center"><i class="fas fa-spinner fa-spin"></i> Searching Civitai...</p>';
-            try {
-                const response = await fetch(`/api/civitai/search?query=${encodeURIComponent(query)}&type=${type}&base_model=${encodeURIComponent(baseModel)}&sort=${encodeURIComponent(sort)}`);
-                const data = await response.json();
-                if (data.models && data.models.length > 0) {
-                    grid.innerHTML = data.models.map(m => `
-                    <div class="model-card" onclick="selectCivitaiModel(${JSON.stringify(m).replace(/"/g, '&quot;')})">
-                        <img src="${m.image || 'https://via.placeholder.com/150?text=No+Image'}" alt="${m.name}" loading="lazy">
-                        <div class="model-info">
-                            <div class="model-name" title="${m.name}">${m.name}</div>
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
-                                <span class="model-type">${m.type}</span>
-                                ${m.base_model ? `<span style="font-size:.6rem;background:var(--card);border:1px solid var(--border);padding:1px 4px;border-radius:4px;color:var(--accent2)">${m.base_model}</span>` : ''}
-                            </div>
-                        </div>
-                    </div>`).join('');
-                } else { grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:.7rem">No models found for this architecture</p>'; }
-            } catch (e) { grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--error)">Search failed</p>'; }
-        }
-
-        function switchModelTab(tab) {
-            currentModelTab = tab;
-            document.querySelectorAll('[data-tab]').forEach(t => t.style.borderColor = t.dataset.tab === tab ? 'var(--text)' : '');
-            searchCivitai();
-        }
+        // La recherche Civitai vit dans static/model-browser.js (fenêtre « Parcourir les modèles »).
 
         // ========== MODAL MODELS ==========
         // LoRA folder management
@@ -4095,6 +4031,7 @@
             const browser = document.getElementById('civitaiBrowser');
             if (browser) {
                 browser.style.display = '';
+                browser.querySelectorAll('details').forEach(d => { d.open = true; });
                 browser.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
             showToast('URL pré-remplie — clique Download pour lancer !', 'success');
@@ -4623,6 +4560,7 @@
             initMetadataDrop();
         });
     </script>
+    <script src="/static/model-browser.js?v=1"></script>
 </body>
 
 </html>

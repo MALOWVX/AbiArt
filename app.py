@@ -969,85 +969,322 @@ def generate_kaggle():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================================
+# Civitai model browser : search, model sheet, example images
+# ============================================================
+import re as _re
+import html as _html
+from collections import Counter as _Counter
+
+CIVITAI_API_BASES = ('https://civitai.com/api/v1', 'https://civitai.red/api/v1')
+CIVITAI_CACHE_TTL = 600     # seconds : the same search is not sent to Civitai twice within 10 minutes
+_civitai_cache = {}
+
+# Civitai rates every image : 1 = PG, 2 = PG-13, 4 = R, 8 = X, 16 = XXX.
+# While adult content is masked, only PG and PG-13 images ever leave this server.
+CIVITAI_SAFE_LEVEL = 2
+_CIVITAI_LEVEL_NAMES = {'none': 1, 'soft': 2, 'mature': 4, 'x': 8}
+
+CIVITAI_SORTS = ('Highest Rated', 'Most Downloaded', 'Most Liked', 'Newest')
+CIVITAI_PERIODS = ('AllTime', 'Year', 'Month', 'Week', 'Day')
+
+# Shown before any search, for people who do not know what to pick :
+# Animagine XL 3.1, NoobAI-XL, Illustrious-XL, Pony Diffusion V6 XL, DreamShaper XL, RealVisXL, DreamShaper, Realistic Vision
+CIVITAI_STARTER_IDS = [260267, 833294, 795765, 257749, 112902, 139562, 4384, 4201]
+
+
+def civitai_get(path, params=None, timeout=15):
+    """GET on the public Civitai API (civitai.com first, civitai.red as a fallback), cached for 10 minutes.
+    Returns the decoded JSON, or None when both hosts fail."""
+    params = [(k, str(v)) for k, v in (params or [])]
+    key = path + '?' + '&'.join(f'{k}={v}' for k, v in params)
+    now = time.time()
+    hit = _civitai_cache.get(key)
+    if hit and now - hit[0] < CIVITAI_CACHE_TTL:
+        return hit[1]
+    headers = {'User-Agent': 'AbiArt-Studio/2.0'}
+    token = os.environ.get('CIVITAI_TOKEN', '').strip()
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+    for base in CIVITAI_API_BASES:
+        try:
+            r = requests.get(f'{base}/{path}', params=params, headers=headers, timeout=timeout)
+            if r.status_code == 200:
+                data = r.json()
+                if len(_civitai_cache) > 300:
+                    _civitai_cache.clear()
+                _civitai_cache[key] = (now, data)
+                return data
+            print(f"[Civitai] {base}/{path} answered {r.status_code}")
+        except Exception as req_err:
+            print(f"[Civitai] {base}/{path} failed: {req_err}")
+    return None
+
+
+def _civitai_show_adult():
+    return request.args.get('adult', '').strip() == '1'
+
+
+def _civitai_level(img):
+    level = img.get('browsingLevel')
+    if isinstance(level, bool) or not isinstance(level, int):
+        level = img.get('nsfwLevel')
+    if isinstance(level, str):
+        level = _CIVITAI_LEVEL_NAMES.get(level.lower())
+    if isinstance(level, bool) or not isinstance(level, int):
+        return 99       # unrated : treated as adult
+    return level
+
+
+def _civitai_sized(url, width):
+    # https://image.civitai.com/<key>/<uuid>/original=true/<name>.jpeg  ->  .../width=450/<name>.jpeg
+    return _re.sub(r'/(?:original=true|width=\d+)[^/]*/', f'/width={width}/', url, count=1)
+
+
+def _civitai_images(images, show_adult, limit=None):
+    out = []
+    for img in images or []:
+        if not isinstance(img, dict) or img.get('type', 'image') != 'image' or not img.get('url'):
+            continue
+        level = _civitai_level(img)
+        if not show_adult and level > CIVITAI_SAFE_LEVEL:
+            continue
+        entry = {
+            'url': _civitai_sized(img['url'], 450),
+            'full': _civitai_sized(img['url'], 1024),
+            'adult': level > CIVITAI_SAFE_LEVEL,
+        }
+        meta = _civitai_meta(img.get('meta'))
+        if meta:
+            entry['meta'] = meta
+        out.append(entry)
+        if limit and len(out) >= limit:
+            break
+    return out
+
+
+def _civitai_number(value):
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _civitai_meta(meta):
+    """Generation settings attached to an example image, reduced to what the site can reuse."""
+    if not isinstance(meta, dict) or not meta.get('prompt'):
+        return None
+    out = {
+        'prompt': str(meta.get('prompt') or '')[:3000],
+        'negative': str(meta.get('negativePrompt') or '')[:2000],
+        'sampler': str(meta.get('sampler') or '')[:60],
+    }
+    steps = _civitai_number(meta.get('steps'))
+    cfg = _civitai_number(meta.get('cfgScale'))
+    clip = _civitai_number(meta.get('clipSkip') or meta.get('Clip skip'))
+    if steps and 1 <= steps <= 150:
+        out['steps'] = int(steps)
+    if cfg and 0 < cfg <= 30:
+        out['cfg'] = round(cfg, 1)
+    if clip and 1 <= clip <= 12:
+        out['clip_skip'] = int(clip)
+    size = _re.match(r'^\s*(\d{2,5})\s*[xX]\s*(\d{2,5})\s*$', str(meta.get('Size') or ''))
+    if size:
+        out['width'], out['height'] = int(size.group(1)), int(size.group(2))
+    return out
+
+
+def _civitai_recommended(metas):
+    """Settings the example images agree on. An estimate : Civitai has no dedicated field for this."""
+    metas = [m for m in metas if m]
+    if len(metas) < 3:
+        return None
+
+    def spread(key):
+        values = sorted(m[key] for m in metas if key in m)
+        if len(values) < 3:
+            return None
+        return [values[len(values) // 4], values[(3 * len(values)) // 4]]
+
+    def most_common(key):
+        values = [m[key] for m in metas if m.get(key)]
+        return _Counter(values).most_common(1)[0][0] if values else None
+
+    return {
+        'count': len(metas),
+        'sampler': most_common('sampler'),
+        'steps': spread('steps'),
+        'cfg': spread('cfg'),
+        'clip_skip': most_common('clip_skip'),
+    }
+
+
+def _civitai_text(markup, limit):
+    text = _re.sub(r'(?i)<\s*(?:br|/p|/li|/h[1-6]|/div|/tr)\s*/?>', '\n', markup or '')
+    text = _re.sub(r'<[^>]+>', '', text)
+    text = _html.unescape(text)
+    text = _re.sub(r'[ \t\xa0]+', ' ', text)
+    text = _re.sub(r'\n\s*\n+', '\n\n', text).strip()
+    return text[:limit]
+
+
+def _civitai_file(version):
+    files = [f for f in (version.get('files') or []) if isinstance(f, dict)]
+    primary = next((f for f in files if f.get('primary')), None) or next((f for f in files if f.get('type') == 'Model'), None) or (files[0] if files else {})
+    meta = primary.get('metadata') or {}
+    return {
+        'filename': primary.get('name') or 'model.safetensors',
+        'size_kb': int(primary.get('sizeKB') or 0),
+        'download_url': primary.get('downloadUrl') or version.get('downloadUrl') or '',
+        'format': ' '.join(str(x) for x in (meta.get('format'), meta.get('fp')) if x),
+    }
+
+
+def _civitai_card(item, show_adult):
+    version = (item.get('modelVersions') or [{}])[0] or {}
+    file_info = _civitai_file(version)
+    images = _civitai_images(version.get('images'), show_adult, limit=1)
+    stats = item.get('stats') or {}
+    return {
+        'id': item.get('id'),
+        'name': item.get('name') or '',
+        'type': item.get('type') or '',
+        'creator': (item.get('creator') or {}).get('username') or '',
+        'base_model': version.get('baseModel') or '',
+        'version': version.get('name') or '',
+        'image': images[0]['url'] if images else '',
+        'image_hidden': bool(not images and version.get('images')),
+        'download_url': file_info['download_url'],
+        'filename': file_info['filename'],
+        'size_kb': file_info['size_kb'],
+        'trained_words': version.get('trainedWords') or [],
+        'downloads': stats.get('downloadCount') or 0,
+        'likes': stats.get('thumbsUpCount') or 0,
+        'rating': round(stats.get('rating') or 0.0, 1),
+    }
+
+
 @app.route('/api/civitai/search', methods=['GET'])
 def search_civitai():
-    """Search Civitai for models with base architecture filter (Flux, SDXL, Illustrious, Pony, SD 1.5)"""
+    """Search Civitai. Filters : type, base models (comma separated), sort, period, tag ; `cursor` pages.
+    adult=1 shows everything, adult=0 hides adult models and images ; without it (older callers) only images are masked."""
     try:
         query = request.args.get('query', '').strip()
         model_type = request.args.get('type', '').strip()
-        base_model = request.args.get('base_model', '').strip()
-        sort = request.args.get('sort', 'Highest Rated').strip()
+        base_models = [b.strip() for b in request.args.get('base_model', '').split(',') if b.strip() and b.strip().lower() != 'all']
+        sort = request.args.get('sort', '').strip()
+        period = request.args.get('period', '').strip()
+        tag = request.args.get('tag', '').strip()
+        cursor = request.args.get('cursor', '').strip()
+        adult = request.args.get('adult', '').strip()
 
-        params = {
-            'limit': 24,
-            'sort': sort or 'Highest Rated',
-        }
+        params = [('limit', 24), ('sort', sort if sort in CIVITAI_SORTS else 'Highest Rated')]
         if query:
-            params['query'] = query
+            params.append(('query', query[:100]))
         if model_type:
-            params['types'] = model_type
-        if base_model and base_model.lower() not in ('all', ''):
-            params['baseModels'] = base_model
+            params.append(('types', model_type))
+        for base_model in base_models[:8]:
+            params.append(('baseModels', base_model))
+        if period in CIVITAI_PERIODS:
+            params.append(('period', period))
+        if tag:
+            params.append(('tag', tag[:40]))
+        if cursor:
+            params.append(('cursor', cursor[:200]))
+        if adult == '1':
+            params.append(('nsfw', 'true'))
+        elif adult == '0':
+            params.append(('nsfw', 'false'))
 
-        headers = {
-            'User-Agent': 'AbiArt-Studio/2.0'
-        }
-        civitai_token = os.environ.get('CIVITAI_TOKEN', '').strip()
-        if civitai_token:
-            headers['Authorization'] = f'Bearer {civitai_token}'
-
-        # Try official civitai.com first, fallback to civitai.red mirror
-        response = None
-        for base_url in ('https://civitai.com/api/v1/models', 'https://civitai.red/api/v1/models'):
-            try:
-                r = requests.get(base_url, params=params, headers=headers, timeout=12)
-                if r.status_code == 200:
-                    response = r
-                    break
-            except Exception as req_err:
-                print(f"[Civitai] Search attempt on {base_url} failed: {req_err}")
-
-        if response and response.status_code == 200:
-            data = response.json()
-            models = []
-
-            for item in data.get('items', []):
-                item_type = item.get('type', '')
-
-                if model_type:
-                    if model_type == 'Checkpoint' and item_type != 'Checkpoint':
-                        continue
-                    if model_type == 'LORA' and item_type != 'LORA':
-                        continue
-
-                version = item.get('modelVersions', [{}])[0]
-                version_base_model = version.get('baseModel', '')
-                files = version.get('files', [{}])
-                primary_file = files[0] if files else {}
-                images = version.get('images', [{}])
-                image_url = images[0].get('url', '') if images else ''
-
-                raw_download_url = primary_file.get('downloadUrl', '')
-
-                stats = item.get('stats', {})
-                models.append({
-                    'id': item.get('id'),
-                    'name': item.get('name'),
-                    'type': item_type,
-                    'base_model': version_base_model,
-                    'version': version.get('name'),
-                    'image': image_url,
-                    'download_url': raw_download_url,
-                    'filename': primary_file.get('name', 'model.safetensors'),
-                    'trained_words': version.get('trainedWords', []),
-                    'downloads': stats.get('downloadCount', 0),
-                    'rating': round(stats.get('rating', 0.0), 1)
-                })
-
-            return jsonify({'models': models})
-        else:
+        data = civitai_get('models', params)
+        if data is None:
             return jsonify({'error': 'Civitai search could not be completed'}), 502
 
+        show_adult = adult == '1'
+        models = []
+        for item in data.get('items', []):
+            if model_type and item.get('type') != model_type:
+                continue
+            if adult == '0' and item.get('nsfw'):
+                continue
+            models.append(_civitai_card(item, show_adult))
+        return jsonify({'models': models, 'next_cursor': (data.get('metadata') or {}).get('nextCursor') or ''})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/civitai/starter', methods=['GET'])
+def civitai_starter():
+    """A short list of well-known checkpoints, shown before any search."""
+    try:
+        show_adult = _civitai_show_adult()
+        params = [('ids', i) for i in CIVITAI_STARTER_IDS] + [('limit', len(CIVITAI_STARTER_IDS))]
+        data = civitai_get('models', params)
+        if data is None:
+            return jsonify({'models': []})
+        by_id = {item.get('id'): item for item in data.get('items', [])}
+        models = [_civitai_card(by_id[i], show_adult) for i in CIVITAI_STARTER_IDS if i in by_id]
+        return jsonify({'models': models})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/civitai/model/<int:model_id>', methods=['GET'])
+def civitai_model(model_id):
+    """Model sheet : versions, files, cover images, author's description."""
+    try:
+        show_adult = _civitai_show_adult()
+        data = civitai_get(f'models/{model_id}')
+        if data is None:
+            return jsonify({'error': 'Civitai did not return this model'}), 502
+        versions = []
+        for version in (data.get('modelVersions') or [])[:12]:
+            file_info = _civitai_file(version)
+            versions.append({
+                'id': version.get('id'),
+                'name': version.get('name') or '',
+                'base_model': version.get('baseModel') or '',
+                'published': str(version.get('publishedAt') or '')[:10],
+                'trained_words': version.get('trainedWords') or [],
+                'notes': _civitai_text(version.get('description'), 1500),
+                'images': _civitai_images(version.get('images'), show_adult, limit=12),
+                **file_info,
+            })
+        stats = data.get('stats') or {}
+        return jsonify({
+            'id': data.get('id'),
+            'name': data.get('name') or '',
+            'type': data.get('type') or '',
+            'creator': (data.get('creator') or {}).get('username') or '',
+            'tags': [str(t) for t in (data.get('tags') or [])[:10]],
+            'description': _civitai_text(data.get('description'), 4000),
+            'downloads': stats.get('downloadCount') or 0,
+            'likes': stats.get('thumbsUpCount') or 0,
+            'adult': bool(data.get('nsfw')),
+            'url': f'https://civitai.com/models/{model_id}',
+            'versions': versions,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/civitai/images', methods=['GET'])
+def civitai_images():
+    """Example images of one model version, with the settings that produced them."""
+    try:
+        version_id = request.args.get('version_id', '').strip()
+        if not version_id.isdigit():
+            return jsonify({'error': 'version_id is required'}), 400
+        show_adult = _civitai_show_adult()
+        params = [('modelVersionId', version_id), ('limit', 40), ('withMeta', 'true')]
+        if show_adult:
+            params.append(('nsfw', 'X'))
+        data = civitai_get('images', params, timeout=20)
+        if data is None:
+            return jsonify({'images': [], 'recommended': None})
+        images = _civitai_images(data.get('items'), show_adult, limit=20)
+        return jsonify({'images': images, 'recommended': _civitai_recommended([i.get('meta') for i in images])})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
