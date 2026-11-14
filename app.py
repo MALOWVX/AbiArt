@@ -1398,16 +1398,20 @@ def download_to_kaggle():
 
         payload = {'url': model_url, 'type': kind, 'filename': filename}
         # The server-side Civitai token is only sent to the Kaggle backend registered on the server,
-        # never to a URL that merely came from the browser.
+        # or to the backend an administrator is using : never to a URL an ordinary user typed in the browser.
         # 1) token typed in the site's "Civitai API Token" field (sent by the browser)
         civitai_token = (data.get('token', '') or '').strip()
         token_source = 'the site field' if civitai_token else 'none'
-        # 2) otherwise the server-side CIVITAI_TOKEN, only for the Kaggle backend registered on the server
+        # 2) otherwise the server-side CIVITAI_TOKEN, for the registered Kaggle backend or for an administrator
         if not civitai_token:
             env_token = os.environ.get('CIVITAI_TOKEN', '').strip()
-            if env_token and base_url == (get_kaggle_url() or '').rstrip('/'):
+            current_user = get_current_user()
+            is_admin = bool(current_user and current_user['is_admin'])
+            if env_token and (is_admin or base_url == (get_kaggle_url() or '').rstrip('/')):
                 civitai_token = env_token
                 token_source = 'server variable CIVITAI_TOKEN (the field was empty)'
+            elif env_token:
+                token_source = 'none (CIVITAI_TOKEN is kept for the registered backend and for administrators)'
         if civitai_token:
             payload['token'] = civitai_token
         print(f"[Kaggle] Civitai token sent to the notebook: {token_source}")
