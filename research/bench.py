@@ -18,6 +18,14 @@ Trois commandes, à lancer depuis le dossier du projet. Python standard uniqueme
       automatique entre deux images et l'effet de la retouche. Écrit aussi report.md.
 
 Les résultats vont dans research/runs/<nom> (option --run, « e1 » par défaut).
+
+Série « retouche du visage » (quel texte de retouche améliore le visage sans changer son style ?) :
+
+  python research/bench.py --run f1 --config config_faces.json --prompts prompts_faces_v1.json run --url https://xxxx.trycloudflare.com
+  python research/bench.py --run f1 compare
+      Montre côte à côte, en gros plan, le visage sans retouche et avec retouche (côtés tirés au hasard) :
+      le style est-il le même ? lequel est le mieux réalisé ?
+  python research/bench.py --run f1 analyze
 """
 import argparse
 import base64
@@ -104,22 +112,54 @@ def http_json(method, url, body=None, timeout=60):
         return code, None
 
 
-def build_tasks(cfg, prompts, variants):
+def build_tasks(cfg, prompts, variants, models=None):
+    """models : {clé: fichier du checkpoint} quand la série compare plusieurs checkpoints (« models » dans la config).
+    Les tâches sont rangées checkpoint par checkpoint : chaque GPU ne change de modèle qu'une fois."""
     tasks = []
-    for vname in variants:
-        v = cfg["variants"][vname]
-        seeds = cfg["seeds"] if v.get("seeds") == "all" else cfg["seeds"][:1]
-        for p in prompts:
-            if p["cat"] not in v["cats"]:
-                continue
-            for seed in seeds:
-                tasks.append({"id": "%s_s%d_%s" % (p["id"], seed, vname), "pid": p["id"], "cat": p["cat"],
-                              "chars": p["chars"], "seed": seed, "variant": vname, "prompt": p["prompt"]})
+    specs = {s["key"]: s for s in cfg.get("models") or []}
+    for mkey, mfile in (models or {None: None}).items():
+        for vname in variants:
+            v = cfg["variants"][vname]
+            seeds = cfg["seeds"] if v.get("seeds") == "all" else cfg["seeds"][:1]
+            for p in prompts:
+                if p["cat"] not in v["cats"]:
+                    continue
+                for seed in seeds:
+                    t = {"id": "%s_s%d_%s" % (p["id"], seed, vname), "pid": p["id"], "cat": p["cat"],
+                         "chars": p["chars"], "seed": seed, "variant": vname, "prompt": p["prompt"]}
+                    if p.get("size"):
+                        t["size"] = p["size"]
+                    if mkey:
+                        t.update(id=mkey + "_" + t["id"], mkey=mkey, model=mfile)
+                        if "quality" in specs.get(mkey, {}):
+                            t["quality"] = specs[mkey]["quality"]
+                    tasks.append(t)
     return tasks
 
 
+def resolve_models(base, cfg, keys):
+    """Retrouve sur le notebook le fichier de chaque checkpoint de la série (« match » = morceau du nom)."""
+    code, listing = http_json("GET", base + "/sdapi/v1/sd-models", timeout=30)
+    names = [m.get("title") or m.get("model_name") for m in (listing or []) if isinstance(m, dict)] if code == 200 else []
+    out, problems = {}, []
+    for spec in cfg["models"]:
+        if keys and spec["key"] not in keys:
+            continue
+        hits = [n for n in names if spec["match"].lower() in n.lower()]
+        if len(hits) == 1:
+            out[spec["key"]] = hits[0]
+        else:
+            problems.append("« %s » : %s" % (spec["match"], "aucun checkpoint ne correspond" if not hits
+                                             else "plusieurs correspondent (%s)" % ", ".join(hits)))
+    if problems:
+        sys.exit("Checkpoint(s) introuvable(s) sur le notebook :\n  " + "\n  ".join(problems) +
+                 "\nCheckpoints installés : " + (", ".join(names) or "aucun (ou liste illisible)") +
+                 "\nInstallez-le depuis le site, précisez « match » dans la config, ou limitez la série avec --models.")
+    return out
+
+
 def build_payload(cfg, task):
-    quality = (cfg.get("quality") or "").strip()
+    quality = (task["quality"] if "quality" in task else cfg.get("quality") or "").strip()
     payload = {
         "prompt": task["prompt"] + (", " + quality if quality else ""),
         "negative_prompt": cfg.get("negative", ""),
@@ -127,8 +167,8 @@ def build_payload(cfg, task):
         "sampler_name": cfg["sampler"], "scheduler": cfg.get("scheduler", "Automatic"), "seed": task["seed"],
         "override_settings": {"CLIP_stop_at_last_layers": cfg.get("clip_skip", 1)},
     }
-    if cfg.get("model"):
-        payload["abiart_model"] = cfg["model"]
+    if task.get("model") or cfg.get("model"):
+        payload["abiart_model"] = task.get("model") or cfg["model"]
     tabs = cfg["variants"][task["variant"]].get("detailers") or []
     if tabs:
         full = [dict({"ad_prompt": "", "ad_negative_prompt": "", "ad_use_steps": True, "ad_steps": cfg["steps"]}, **t)
@@ -197,11 +237,24 @@ def cmd_run(args):
     unknown = [v for v in variants if v not in cfg["variants"]]
     if unknown:
         sys.exit("Variante(s) inconnue(s) dans config.json : " + ", ".join(unknown))
-    tasks = build_tasks(cfg, prompts, variants)
+    models = None
+    if cfg.get("models"):
+        keys = [k.strip() for k in args.models.split(",") if k.strip()]
+        models = resolve_models(base, cfg, keys)
+        before = (load_json(os.path.join(d, "setup.json"), {}) or {}).get("models") or {}
+        changed = [k for k in models if k in before and before[k] != models[k]]
+        if changed:
+            sys.exit("Cette série a été commencée avec un autre fichier pour : %s (%s). Utilisez un autre nom de série (--run)."
+                     % (", ".join(changed), ", ".join(before[k] for k in changed)))
+        print("Checkpoints : " + ", ".join("%s = %s" % kv for kv in models.items()))
+    tasks = build_tasks(cfg, prompts, variants, models)
     if args.limit:
         tasks = tasks[:args.limit]
-    save_json(os.path.join(d, "setup.json"), {"config": cfg, "url_host": base.split("//")[-1].split(".")[0][:6] + "…",
-                                              "started": time.strftime("%Y-%m-%d %H:%M")})
+    setup = {"config": cfg, "url_host": base.split("//")[-1].split(".")[0][:6] + "…",
+             "started": time.strftime("%Y-%m-%d %H:%M")}
+    if models:
+        setup["models"] = dict((load_json(os.path.join(d, "setup.json"), {}) or {}).get("models") or {}, **models)
+    save_json(os.path.join(d, "setup.json"), setup)
     todo = queue.Queue()
     n_gen = 0
     for t in tasks:
@@ -457,15 +510,406 @@ def cmd_label(args):
             except Exception:
                 self._send(400, b'{"ok":false}')
 
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    serve(Handler, args, "%d images" % len(order))
+
+
+def serve(handler, args, what):
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     url = "http://localhost:%d" % args.port
-    print("Page d'évaluation : %s   (%d images ; Ctrl+C pour arrêter, les réponses sont enregistrées au fur et à mesure)" % (url, len(order)))
+    print("Page d'évaluation : %s   (%s ; Ctrl+C pour arrêter, les réponses sont enregistrées au fur et à mesure)" % (url, what))
     if not args.no_browser:
         webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+
+
+# ------------------------------------------------------------------------------------------------
+# compare : séries « retouche du visage », jugement par paires (sans retouche / avec retouche)
+# ------------------------------------------------------------------------------------------------
+COMPARE_PAGE = r"""<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>AbiArt — comparaison à l'aveugle</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#0b0c0f;--panel:#14161b;--raised:#1d2027;--text:#edeef2;--muted:rgba(237,238,242,.62);--border:rgba(255,255,255,.1);--accent:#8f7cf7}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,"Segoe UI",sans-serif;height:100vh;display:flex;overflow:hidden}
+#stage{flex:1;min-width:0;height:100vh;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr);gap:16px;padding:20px}
+.pane{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;gap:8px}
+.pane .tag{font-size:13px;font-weight:600;color:var(--muted);height:20px}
+.pane canvas{border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6);background:var(--raised)}
+aside{width:340px;flex:none;background:var(--panel);border-left:1px solid var(--border);padding:24px;display:flex;flex-direction:column;gap:18px;overflow-y:auto}
+h1{font-size:17px;font-weight:650;letter-spacing:-.01em}
+.bar{height:6px;border-radius:99px;background:var(--raised);overflow:hidden}
+.bar>div{height:100%;background:var(--accent);width:0;transition:width .2s}
+.muted{color:var(--muted);font-size:13px}
+.q{border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;opacity:.45}
+.q.active{opacity:1;border-color:var(--accent)}
+.q h2{font-size:14px;font-weight:600}
+.choices{display:grid;gap:8px}
+button{font:inherit;color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px}
+button:hover{border-color:rgba(255,255,255,.3)}
+button.sel{border-color:var(--accent);background:rgba(143,124,247,.18)}
+kbd{font:600 12px ui-monospace,Consolas,monospace;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:2px 7px;min-width:24px;text-align:center}
+.nav{display:flex;gap:8px;margin-top:auto}
+.nav button{flex:1;justify-content:center}
+#done{display:none;text-align:center;padding:40px 10px}
+#done h2{font-size:20px;margin-bottom:8px}
+@media (max-width:720px){body{flex-direction:column;overflow:auto;height:auto}#stage{height:60vh;padding:12px;gap:8px}aside{width:100%;border-left:none;border-top:1px solid var(--border)}}
+</style></head><body>
+<div id="stage">
+  <div class="pane"><div class="tag">Image 1</div><canvas id="c0"></canvas></div>
+  <div class="pane"><div class="tag">Image 2</div><canvas id="c1"></canvas></div>
+</div>
+<aside>
+  <div><h1>Comparaison à l'aveugle</h1><p class="muted" id="progress">Chargement…</p></div>
+  <div class="bar"><div id="fill"></div></div>
+  <div id="work">
+    <div class="q" id="qStyle">
+      <h2>Le visage a-t-il le même style sur les deux images ?</h2>
+      <div class="choices">
+        <button data-style="same"><kbd>1</kbd>Même style</button>
+        <button data-style="slight"><kbd>2</kbd>Légèrement différent</button>
+        <button data-style="diff"><kbd>3</kbd>Style différent</button>
+        <button data-style="none"><kbd>4</kbd>Pas de visage comparable</button>
+      </div>
+      <p class="muted">Style = trait, rendu (dessin ou réaliste), couleur des yeux et des cheveux, expression. Ne tenez pas compte des défauts ici.</p>
+    </div>
+    <div class="q" id="qPick" style="margin-top:14px">
+      <h2>Sur quelle image le visage est-il le mieux réalisé ?</h2>
+      <div class="choices">
+        <button data-pick="left"><kbd>1</kbd>Image 1</button>
+        <button data-pick="same"><kbd>2</kbd>Pareil</button>
+        <button data-pick="right"><kbd>3</kbd>Image 2</button>
+      </div>
+      <p class="muted">Mieux réalisé = yeux nets et symétriques, bouche et nez propres, aucune déformation. Jugez la qualité, pas le style.</p>
+    </div>
+    <p class="muted" style="margin-top:14px"><kbd>F</kbd> image entière ou gros plan sur le visage</p>
+  </div>
+  <div id="done"><h2>Terminé, merci !</h2><p class="muted">Toutes les paires sont évaluées. Vous pouvez fermer cette page.</p></div>
+  <div class="nav"><button id="prev"><kbd>←</kbd> Précédente</button><button id="next">Suivante <kbd>→</kbd></button></div>
+</aside>
+<script>
+let items = [], labels = {}, cur = 0, step = 'style', full = false, imgs = [], loadedFor = -1;
+const $ = id => document.getElementById(id);
+
+function complete(i) { const l = labels[i]; return !!l && (l.style === 'none' || (!!l.style && !!l.pick)); }
+function firstTodo() { const i = items.findIndex((_, k) => !complete(k)); return i < 0 ? items.length : i; }
+
+// Gros plan carré autour du visage détecté sur l'image sans retouche (même cadre sur les deux images)
+function crop(img, box) {
+  const W = img.naturalWidth, H = img.naturalHeight;
+  if (full || !box) return [0, 0, W, H];
+  const side = Math.min(Math.max(256, 2.5 * Math.max(box[2] - box[0], box[3] - box[1])), W, H);
+  const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
+  return [Math.max(0, Math.min(W - side, cx - side / 2)), Math.max(0, Math.min(H - side, cy - side / 2)), side, side];
+}
+function draw() {
+  if (cur >= items.length) return;
+  for (let s = 0; s < 2; s++) {
+    const img = imgs[s], c = $('c' + s);
+    if (!img || !img.complete || !img.naturalWidth) { c.width = c.height = 0; continue; }
+    const [sx, sy, sw, sh] = crop(img, items[cur].box);
+    const pane = c.parentElement, k = Math.min(pane.clientWidth / sw, (pane.clientHeight - 28) / sh);
+    const dpr = window.devicePixelRatio || 1;
+    c.style.width = Math.round(sw * k) + 'px'; c.style.height = Math.round(sh * k) + 'px';
+    c.width = Math.round(sw * k * dpr); c.height = Math.round(sh * k * dpr);
+    const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+    g.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  }
+}
+function load() {
+  if (loadedFor === cur) return;
+  const idx = cur; loadedFor = idx;
+  imgs = [0, 1].map(s => { const im = new Image(); im.onload = () => { if (loadedFor === idx) draw(); }; im.src = '/img/' + idx + '/' + s; return im; });
+  draw();
+}
+function render() {
+  const n = items.length, doneN = items.filter((_, k) => complete(k)).length;
+  $('progress').textContent = doneN + ' / ' + n + ' paires évaluées';
+  $('fill').style.width = (n ? 100 * doneN / n : 0) + '%';
+  const finished = cur >= n;
+  $('work').style.display = finished ? 'none' : '';
+  $('done').style.display = finished ? 'block' : 'none';
+  $('stage').style.visibility = finished ? 'hidden' : 'visible';
+  if (finished) return;
+  const l = labels[cur] || {};
+  $('qStyle').classList.toggle('active', step === 'style');
+  $('qPick').classList.toggle('active', step === 'pick');
+  document.querySelectorAll('[data-style]').forEach(b => b.classList.toggle('sel', l.style === b.dataset.style));
+  document.querySelectorAll('[data-pick]').forEach(b => b.classList.toggle('sel', l.pick === b.dataset.pick));
+  load();
+}
+async function save(i) {
+  await fetch('/api/label', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ i }, labels[i])) });
+}
+function go(i) { cur = Math.max(0, Math.min(items.length, i)); step = 'style'; render(); }
+function setStyle(v) {
+  if (cur >= items.length) return;
+  labels[cur] = Object.assign({}, labels[cur], { style: v });
+  if (v === 'none') { delete labels[cur].pick; save(cur); go(cur + 1); return; }
+  save(cur);
+  if (labels[cur].pick) go(cur + 1); else { step = 'pick'; render(); }
+}
+function setPick(v) {
+  if (cur >= items.length || (labels[cur] || {}).style === 'none') return;
+  labels[cur] = Object.assign({}, labels[cur], { pick: v });
+  save(cur);
+  if (labels[cur].style) go(cur + 1); else { step = 'style'; render(); }
+}
+document.querySelectorAll('[data-style]').forEach(b => b.onclick = () => setStyle(b.dataset.style));
+document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => setPick(b.dataset.pick));
+$('prev').onclick = () => go(cur - 1);
+$('next').onclick = () => go(cur + 1);
+window.addEventListener('resize', draw);
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') return go(cur - 1);
+  if (e.key === 'ArrowRight') return go(cur + 1);
+  if (e.code === 'KeyF') { full = !full; return draw(); }
+  const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code);   // indépendant du clavier (AZERTY sans Maj)
+  if (!m) return;
+  const d = Number(m[1]);
+  if (step === 'style') { if (d >= 1 && d <= 4) setStyle(['same', 'slight', 'diff', 'none'][d - 1]); }
+  else if (d >= 1 && d <= 3) setPick(['left', 'same', 'right'][d - 1]);
+});
+fetch('/api/state').then(r => r.json()).then(s => { items = s.items; labels = s.labels; go(firstTodo()); });
+</script></body></html>
+"""
+
+
+def faces_config(d):
+    """Configuration d'une série « retouche du visage » (enregistrée par run), sinon None."""
+    cfg = ((load_json(os.path.join(d, "setup.json"), {}) or {}).get("config")) or {}
+    return cfg if cfg.get("kind") == "faces" else None
+
+
+def face_pairs(cfg, metas):
+    """Paires (sans retouche, avec retouche) : même checkpoint, même prompt, même seed."""
+    ref = cfg.get("reference", "base")
+    groups = {}
+    for m in metas.values():
+        groups.setdefault((m.get("mkey") or "", m["pid"], m["seed"]), {})[m["variant"]] = m["id"]
+    pairs = {}
+    for key, vs in groups.items():
+        for v, i in vs.items():
+            if v != ref and ref in vs:
+                pairs[vs[ref] + "|" + i] = {"key": key, "variant": v, "base": vs[ref], "retouched": i}
+    return pairs
+
+
+def face_box(meta, detectors):
+    """Plus grand visage détecté (x0, y0, x1, y1), ou None."""
+    for model in detectors:
+        if model.startswith("face_"):
+            det = (meta.get("detections") or {}).get(model) or {}
+            found = [b["box"] for b in det.get("boxes", []) if b["conf"] >= CONF_MIN]
+            if found:
+                return max(found, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
+    return None
+
+
+def pair_order(d, pairs, recheck):
+    """Ordre stable, côté gauche/droite tiré au hasard. recheck : paires reposées une seconde fois, côtés inversés."""
+    path = os.path.join(d, "pairs_order.json")
+    order = [e for e in (load_json(path, []) or []) if e["id"].split("#")[0] in pairs]
+    known = {e["id"] for e in order}
+    rng = random.Random(LABEL_SEED + len(order))
+    new = [{"id": k, "flip": rng.random() < 0.5} for k in sorted(pairs) if k not in known]
+    if recheck and new and not any(e["id"].endswith("#2") for e in order):
+        new += [{"id": e["id"] + "#2", "flip": not e["flip"]} for e in rng.sample(new, min(recheck, len(new)))]
+    rng.shuffle(new)
+    order += new
+    save_json(path, order)
+    return order
+
+
+def cmd_compare(args):
+    d = run_dir(args.run)
+    cfg = faces_config(d)
+    if not cfg:
+        sys.exit("La série « %s » n'est pas une série « retouche du visage » : utilisez « label »." % args.run)
+    metas = all_meta(d)
+    pairs = face_pairs(cfg, metas)
+    if not pairs:
+        sys.exit("Aucune paire complète dans %s : lancez d'abord « run »." % d)
+    order = pair_order(d, pairs, args.recheck)
+    labels_path = os.path.join(d, "pair_labels.json")
+    lock = threading.Lock()
+
+    def sides(k):
+        e = order[k]
+        p = pairs[e["id"].split("#")[0]]
+        return (p["retouched"], p["base"]) if e["flip"] else (p["base"], p["retouched"])
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def _send(self, code, body, ctype="application/json"):
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            path = self.path.split("?")[0]
+            if path == "/":
+                return self._send(200, COMPARE_PAGE.encode("utf-8"), "text/html; charset=utf-8")
+            if path == "/api/state":
+                saved = load_json(labels_path, {}) or {}
+                items = [{"box": face_box(metas[pairs[e["id"].split("#")[0]]["base"]], cfg.get("detectors") or [])}
+                         for e in order]
+                labs = {str(k): {"style": saved[e["id"]].get("style"), "pick": saved[e["id"]].get("pick")}
+                        for k, e in enumerate(order) if e["id"] in saved}
+                return self._send(200, json.dumps({"items": items, "labels": labs}).encode("utf-8"))
+            parts = path.split("/")
+            if len(parts) == 4 and parts[1] == "img" and parts[2].isdigit() and parts[3] in ("0", "1") \
+                    and int(parts[2]) < len(order):
+                with open(os.path.join(d, "images", sides(int(parts[2]))[int(parts[3])] + ".png"), "rb") as f:
+                    return self._send(200, f.read(), "image/png")
+            self._send(404, b"{}")
+
+        def do_POST(self):
+            if self.path != "/api/label":
+                return self._send(404, b"{}")
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
+                k = int(body["i"])
+                e = order[k]
+                entry = {}
+                if body.get("style") in ("same", "slight", "diff", "none"):
+                    entry["style"] = body["style"]
+                if body.get("pick") in ("left", "same", "right") and entry.get("style") != "none":
+                    entry["pick"] = body["pick"]
+                    retouched_side = "left" if e["flip"] else "right"
+                    entry["quality"] = "same" if body["pick"] == "same" else (
+                        "better" if body["pick"] == retouched_side else "worse")
+                with lock:
+                    saved = load_json(labels_path, {}) or {}
+                    saved[e["id"]] = entry
+                    save_json(labels_path, saved)
+                self._send(200, b'{"ok":true}')
+            except Exception:
+                self._send(400, b'{"ok":false}')
+
+    serve(Handler, args, "%d paires" % len(order))
+
+
+def analyze_faces(args, cfg, d):
+    metas = all_meta(d)
+    pairs = face_pairs(cfg, metas)
+    labels = load_json(os.path.join(d, "pair_labels.json"), {}) or {}
+    ref = cfg.get("reference", "base")
+    variants = [v for v in cfg["variants"] if v != ref]
+    models = (load_json(os.path.join(d, "setup.json"), {}) or {}).get("models") or {}
+    lines = []
+
+    def out(s=""):
+        lines.append(s)
+        print(s)
+
+    def lab(pid):
+        entry = labels.get(pid) or {}
+        return entry if entry.get("style") in ("same", "slight", "diff") and entry.get("quality") else None
+
+    judged = {pid: lab(pid) for pid in pairs if lab(pid)}
+    out("# Banc d'essai AbiArt — série « %s » (retouche du visage)" % args.run)
+    out("")
+    out("%d images, %d paires sans retouche / avec retouche, dont %d jugées à l'aveugle. Réglages : %s, %d pas, CFG %s, %d×%d." % (
+        len(metas), len(pairs), len(judged), cfg["sampler"], cfg["steps"], cfg["cfg"], cfg["width"], cfg["height"]))
+    if models:
+        out("Checkpoints : " + ", ".join("%s = %s" % kv for kv in models.items()) + ".")
+    skipped = sum(1 for pid in pairs if (labels.get(pid) or {}).get("style") == "none")
+    if skipped:
+        out("%d paire(s) sans visage comparable, exclues." % skipped)
+    if len(judged) + skipped < len(pairs):
+        out("ATTENTION : %d paire(s) pas encore jugée(s) ; les chiffres ci-dessous sont partiels." % (len(pairs) - len(judged) - skipped))
+    out("")
+    for v in variants:
+        out("- **%s** : %s" % (v, cfg["variants"][v].get("desc", "")))
+
+    out("\n## 1. Coût de calcul")
+    for v in [ref] + variants:
+        secs = [m["seconds"] for m in metas.values() if m["variant"] == v and isinstance(m.get("seconds"), (int, float))]
+        if secs:
+            out("- %-9s : %5.1f s par image en moyenne (%d images)" % (v, sum(secs) / len(secs), len(secs)))
+
+    def share(k, n):
+        return "%d/%d (%.0f %%)" % (k, n, 100 * k / n) if n else "—"
+
+    def table(select):
+        out("| Variante | Paires | Même style | Légèrement différent | Style différent | Visage mieux réalisé | Pareil | Moins bien | p (mieux / moins bien) |")
+        out("|---|---|---|---|---|---|---|---|---|")
+        for v in variants:
+            ls = [l for pid, l in judged.items() if pairs[pid]["variant"] == v and select(pairs[pid])]
+            n = len(ls)
+            c = lambda field, val: sum(1 for l in ls if l[field] == val)
+            p = sign_test(c("quality", "better"), c("quality", "worse"))
+            out("| %s | %d | %s | %s | %s | %s | %s | %s | %s |" % (
+                v, n, share(c("style", "same"), n), share(c("style", "slight"), n), share(c("style", "diff"), n),
+                share(c("quality", "better"), n), share(c("quality", "same"), n), share(c("quality", "worse"), n),
+                "%.2f" % p if p is not None else "—"))
+
+    out("\n## 2. Chaque retouche comparée à l'image sans retouche")
+    groups = sorted({p["key"][0] for p in pairs.values()})
+    if len(groups) > 1:
+        out("\n### Tous checkpoints")
+        table(lambda p: True)
+    for g in groups:
+        out("\n### " + (g or "checkpoint du notebook"))
+        table(lambda p, g=g: p["key"][0] == g)
+    out("\nLecture : p est la probabilité d'un tel écart entre « mieux » et « moins bien » par hasard ; en dessous de 0,05 l'écart est net.")
+
+    out("\n## 3. Selon la taille du visage (tous checkpoints)")
+    size_of = {pid: metas[p["base"]].get("size") for pid, p in pairs.items()}
+    names = {"close": "gros plan", "mid": "mi-corps", "far": "en pied"}
+    for v in variants:
+        parts = []
+        for s in ("close", "mid", "far"):
+            ls = [l for pid, l in judged.items() if pairs[pid]["variant"] == v and size_of[pid] == s]
+            if ls:
+                parts.append("%s : style différent %d/%d, mieux réalisé %d/%d" % (
+                    names[s], sum(l["style"] == "diff" for l in ls), len(ls), sum(l["quality"] == "better" for l in ls), len(ls)))
+        out("- %-9s %s" % (v, " ; ".join(parts) or "pas encore de paire jugée"))
+
+    out("\n## 4. Variantes face à face (mêmes images)")
+    by_key = {}
+    for pid, l in judged.items():
+        by_key.setdefault(pairs[pid]["key"], {})[pairs[pid]["variant"]] = l
+    q_score = {"better": 1, "same": 0, "worse": -1}
+    s_score = {"same": 0, "slight": 1, "diff": 2}
+    for i, va in enumerate(variants):
+        for vb in variants[i + 1:]:
+            both = [(ls[va], ls[vb]) for ls in by_key.values() if va in ls and vb in ls]
+            if not both:
+                continue
+            qa = sum(q_score[a["quality"]] > q_score[b["quality"]] for a, b in both)
+            qb = sum(q_score[a["quality"]] < q_score[b["quality"]] for a, b in both)
+            sa = sum(s_score[a["style"]] < s_score[b["style"]] for a, b in both)
+            sb = sum(s_score[a["style"]] > s_score[b["style"]] for a, b in both)
+            fmt = lambda p: "%.2f" % p if p is not None else "—"
+            out("- %s contre %s (%d images) : qualité meilleure %d fois contre %d (p = %s) ; style plus fidèle %d fois contre %d (p = %s)" % (
+                vb, va, len(both), qb, qa, fmt(sign_test(qa, qb)), sb, sa, fmt(sign_test(sa, sb))))
+
+    again = [(labels.get(k[:-2]), v) for k, v in labels.items() if k.endswith("#2")]
+    again = [(a, b) for a, b in again if a and b and a.get("style") and b.get("style")]
+    if again:
+        out("\n## 5. Constance de l'évaluateur (paires reposées sans le savoir, côtés inversés)")
+        out("- Même réponse sur le style   : " + pct(sum(a["style"] == b["style"] for a, b in again), len(again)))
+        q = [(a, b) for a, b in again if a.get("quality") and b.get("quality")]
+        out("- Même réponse sur la qualité : " + pct(sum(a["quality"] == b["quality"] for a, b in q), len(q)))
+
+    out("\n## Limites de cette mesure")
+    out("- Un seul évaluateur, un seul seed par prompt, %d prompts : seuls les effets nets sont visibles." % len(
+        {p["key"][1] for p in pairs.values()}))
+    out("- L'évaluateur voit souvent quelle image est retouchée (plus nette) : le jugement « mieux réalisé » n'est pas totalement aveugle.")
+    out("- Prompts en tags, style anime : ne pas généraliser aux checkpoints réalistes ni aux prompts en phrases.")
+    with open(os.path.join(d, "report.md"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print("\nRapport écrit dans " + os.path.join(d, "report.md"))
 
 
 # ------------------------------------------------------------------------------------------------
@@ -526,8 +970,11 @@ def hand_features(meta, detectors):
 
 
 def cmd_analyze(args):
-    cfg, _prompts = load_setup(args)
     d = run_dir(args.run)
+    faces = faces_config(d)
+    if faces:
+        return analyze_faces(args, faces, d)
+    cfg, _prompts = load_setup(args)
     metas = all_meta(d)
     labels = load_json(os.path.join(d, "labels.json"), {}) or {}
     detectors = cfg["detectors"]
@@ -719,6 +1166,7 @@ def cmd_analyze(args):
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
     ap = argparse.ArgumentParser(description="Banc d'essai qualité AbiArt")
@@ -730,14 +1178,19 @@ def main():
     r.add_argument("--url", required=True, help="URL du notebook Kaggle (https://xxxx.trycloudflare.com)")
     r.add_argument("--variants", default="", help="liste séparée par des virgules ; par défaut, toutes celles de config.json")
     r.add_argument("--limit", type=int, default=0, help="ne traiter que les N premières images (essai rapide)")
+    r.add_argument("--models", default="", help="séries à plusieurs checkpoints : clés à traiter (ex. noobai) ; par défaut, toutes")
     lb = sub.add_parser("label", help="évaluer les images à l'aveugle dans le navigateur")
     lb.add_argument("--port", type=int, default=5058)
     lb.add_argument("--no-browser", action="store_true")
     lb.add_argument("--recheck", type=int, default=0,
                     help="nombre d'images déjà jugées à rejuger à l'aveugle (constance de l'évaluateur)")
+    cp = sub.add_parser("compare", help="séries « retouche du visage » : juger les paires sans / avec retouche")
+    cp.add_argument("--port", type=int, default=5058)
+    cp.add_argument("--no-browser", action="store_true")
+    cp.add_argument("--recheck", type=int, default=4, help="paires reposées une seconde fois (constance de l'évaluateur)")
     sub.add_parser("analyze", help="calculer les résultats")
     args = ap.parse_args()
-    {"run": cmd_run, "label": cmd_label, "analyze": cmd_analyze}[args.cmd](args)
+    {"run": cmd_run, "label": cmd_label, "compare": cmd_compare, "analyze": cmd_analyze}[args.cmd](args)
 
 
 if __name__ == "__main__":
