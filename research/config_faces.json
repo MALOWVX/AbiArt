@@ -1,0 +1,85 @@
+{
+  "note": "Série « retouche du visage » : quel texte de retouche améliore le visage sans changer son style ? Ne plus modifier ce fichier une fois la série lancée : une mesure n'est comparable qu'à réglages identiques.",
+  "kind": "faces",
+  "reference": "base",
+  "models": [
+    {
+      "key": "noobai",
+      "match": "noob",
+      "quality": "masterpiece, best quality, newest, absurdres, highres"
+    },
+    {
+      "key": "animagine",
+      "match": "animagine",
+      "quality": "masterpiece, best quality, very aesthetic, absurdres"
+    }
+  ],
+  "negative": "nsfw, lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, jpeg artifacts, signature, watermark, username, blurry",
+  "sampler": "Euler a",
+  "scheduler": "Automatic",
+  "steps": 25,
+  "cfg": 5,
+  "width": 832,
+  "height": 1216,
+  "clip_skip": 1,
+  "seeds": [
+    3003,
+    4004
+  ],
+  "variants": {
+    "base": {
+      "desc": "Une passe simple, sans retouche : l'image de référence pour le style.",
+      "cats": [
+        "face"
+      ],
+      "seeds": "first"
+    },
+    "empty": {
+      "desc": "Retouche du visage à 0,4, champ de retouche vide : la retouche reprend le prompt de l'image seul.",
+      "cats": [
+        "face"
+      ],
+      "seeds": "first",
+      "detailers": [
+        {
+          "ad_model": "face_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.4
+        }
+      ]
+    },
+    "detail": {
+      "desc": "Comme « empty », avec « detailed face, perfect eyes » ajouté au prompt de l'image.",
+      "cats": [
+        "face"
+      ],
+      "seeds": "first",
+      "detailers": [
+        {
+          "ad_model": "face_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.4,
+          "ad_prompt": "detailed face, perfect eyes"
+        }
+      ]
+    },
+    "weighted": {
+      "desc": "Comme « detail », avec ces mots renforcés au poids 1,3.",
+      "cats": [
+        "face"
+      ],
+      "seeds": "first",
+      "detailers": [
+        {
+          "ad_model": "face_yolov9c.pt",
+          "ad_confidence": 0.3,
+          "ad_denoising_strength": 0.4,
+          "ad_prompt": "(detailed face, perfect eyes:1.3)"
+        }
+      ]
+    }
+  },
+  "detectors": [
+    "face_yolov8m.pt"
+  ]
+}

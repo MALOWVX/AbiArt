@@ -1,0 +1,18 @@
+{
+ "version": 1,
+ "note": "Jeu de prompts FIXE de la série « retouche du visage ». Ne pas le modifier entre deux mesures. 'size' = taille du visage attendue : close (gros plan), mid (mi-corps), far (en pied). Chaque prompt fixe une couleur d'yeux et de cheveux, pour voir si la retouche la conserve ; trois prompts imposent un style de dessin.",
+ "prompts": [
+  {"id": "f01", "cat": "face", "size": "close", "chars": 1, "prompt": "1girl, solo, portrait, close-up, blue eyes, black hair, blunt bangs, looking at viewer, light smile, simple background"},
+  {"id": "f02", "cat": "face", "size": "close", "chars": 1, "prompt": "1boy, solo, portrait, green eyes, messy brown hair, glasses, looking at viewer, serious, bookshelf"},
+  {"id": "f03", "cat": "face", "size": "close", "chars": 1, "prompt": "1girl, solo, close-up, red eyes, silver hair, looking to the side, night, flat color, limited palette"},
+  {"id": "f04", "cat": "face", "size": "close", "chars": 1, "prompt": "1girl, solo, portrait, heterochromia, blue eye, yellow eye, pink hair, freckles, smile, watercolor (medium)"},
+  {"id": "f05", "cat": "face", "size": "mid", "chars": 1, "prompt": "1girl, solo, upper body, purple eyes, long blonde hair, school uniform, classroom, window, looking at viewer"},
+  {"id": "f06", "cat": "face", "size": "mid", "chars": 1, "prompt": "1boy, solo, cowboy shot, amber eyes, short black hair, jacket, city street, night, neon lights"},
+  {"id": "f07", "cat": "face", "size": "mid", "chars": 1, "prompt": "1girl, solo, upper body, green eyes, red hair, ponytail, sportswear, gym, sweat, looking at viewer"},
+  {"id": "f08", "cat": "face", "size": "mid", "chars": 1, "prompt": "1girl, solo, cowboy shot, grey eyes, white hair, maid, cafe, holding tray, smile, sketch"},
+  {"id": "f09", "cat": "face", "size": "far", "chars": 1, "prompt": "1girl, solo, full body, standing, blue eyes, black hair, sportswear, hallway, from above, looking at viewer"},
+  {"id": "f10", "cat": "face", "size": "far", "chars": 1, "prompt": "1boy, solo, full body, walking, brown eyes, blond hair, coat, snow, street, wide shot"},
+  {"id": "f11", "cat": "face", "size": "far", "chars": 1, "prompt": "1girl, solo, full body, sitting, orange eyes, aqua hair, twintails, park bench, autumn leaves"},
+  {"id": "f12", "cat": "face", "size": "far", "chars": 1, "prompt": "1girl, solo, full body, jumping, yellow eyes, short purple hair, beach, from below, smile"}
+ ]
+}
